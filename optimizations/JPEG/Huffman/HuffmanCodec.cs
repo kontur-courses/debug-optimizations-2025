@@ -22,30 +22,30 @@ public static class HuffmanCodec
 		return bitsBuffer.ToArray(out bitsCount);
 	}
 
-	public static byte[] Decode(byte[] encodedData, Dictionary<BitsWithLength, byte> decodeTable, long bitsCount)
+	public static byte[] Decode(byte[] encodedData, Dictionary<BitsWithLength, byte> decodeTable, long bitsCount, int length)
 	{
-		var result = new List<byte>();
-
+		var result = new byte[length];
+		var index = 0;
 		var sample = new BitsWithLength { Bits = 0, BitsCount = 0 };
-		for (var byteNum = 0; byteNum < encodedData.Length; byteNum++)
+		var byteNum = 0;
+		foreach (var b in encodedData)
 		{
-			var b = encodedData[byteNum];
 			for (var bitNum = 0; bitNum < 8 && byteNum * 8 + bitNum < bitsCount; bitNum++)
 			{
-				sample.Bits = (sample.Bits << 1) + ((b & (1 << (8 - bitNum - 1))) != 0 ? 1 : 0);
+				sample.Bits = (sample.Bits << 1) | ((b >> (7 - bitNum)) & 1);
 				sample.BitsCount++;
 
 				if (decodeTable.TryGetValue(sample, out var decodedByte))
 				{
-					result.Add(decodedByte);
+					result[index++] = decodedByte;
 
-					sample.BitsCount = 0;
-					sample.Bits = 0;
+					sample = new BitsWithLength { Bits = 0, BitsCount = 0 };
 				}
 			}
+			byteNum++;
 		}
 
-		return result.ToArray();
+		return result;
 	}
 
 	private static Dictionary<BitsWithLength, byte> CreateDecodeTable(BitsWithLength[] encodeTable)
