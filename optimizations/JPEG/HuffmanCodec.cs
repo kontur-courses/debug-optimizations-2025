@@ -79,7 +79,7 @@ class BitsBuffer
 
 class HuffmanCodec
 {
-	public static byte[] Encode(IEnumerable<byte> data, out Dictionary<BitsWithLength, byte> decodeTable,
+	public static byte[] Encode(List<byte> data, out Dictionary<BitsWithLength, byte> decodeTable,
 		out long bitsCount)
 	{
 		var frequences = CalcFrequences(data);
@@ -102,7 +102,6 @@ class HuffmanCodec
 	{
 		var result = new List<byte>();
 
-		byte decodedByte;
 		var sample = new BitsWithLength { Bits = 0, BitsCount = 0 };
 		for (var byteNum = 0; byteNum < encodedData.Length; byteNum++)
 		{
@@ -112,7 +111,7 @@ class HuffmanCodec
 				sample.Bits = (sample.Bits << 1) + ((b & (1 << (8 - bitNum - 1))) != 0 ? 1 : 0);
 				sample.BitsCount++;
 
-				if (decodeTable.TryGetValue(sample, out decodedByte))
+				if (decodeTable.TryGetValue(sample, out var decodedByte))
 				{
 					result.Add(decodedByte);
 

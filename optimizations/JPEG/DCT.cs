@@ -5,45 +5,43 @@ namespace JPEG;
 
 public class DCT
 {
-	public static double[,] DCT2D(double[,] input)
+	public static void DCT2D(double[,] input, double[,] output)
 	{
 		var height = input.GetLength(0);
 		var width = input.GetLength(1);
-		var coeffs = new double[width, height];
 
-		MathEx.LoopByTwoVariables(
-			0, width,
-			0, height,
-			(u, v) =>
+		for (var u = 0; u < width; u++)
+		for (var v = 0; v < height; v++)
+		{
+			var sum = 0.0d;
+			for (var x = 0; x < width; x++)
+			for (var y = 0; y < height; y++)
 			{
-				var sum = MathEx
-					.SumByTwoVariables(
-						0, width,
-						0, height,
-						(x, y) => BasisFunction(input[x, y], u, v, x, y, height, width));
-
-				coeffs[u, v] = sum * Beta(height, width) * Alpha(u) * Alpha(v);
-			});
-
-		return coeffs;
+				sum += BasisFunction(input[x, y], u, v, x, y, height, width);
+			}
+			
+			output[u, v] = sum * Beta(height, width) * Alpha(u) * Alpha(v);
+		}
 	}
 
 	public static void IDCT2D(double[,] coeffs, double[,] output)
 	{
-		for (var x = 0; x < coeffs.GetLength(1); x++)
+		
+		var height = coeffs.GetLength(0);
+		var width = coeffs.GetLength(1);
+		
+		for (var x = 0; x < width; x++)
+		for (var y = 0; y < height; y++)
 		{
-			for (var y = 0; y < coeffs.GetLength(0); y++)
+			var sum = 0.0d;
+			
+			for (var u = 0; u < width; u++)
+			for (var v = 0; v < height; v++)
 			{
-				var sum = MathEx
-					.SumByTwoVariables(
-						0, coeffs.GetLength(1),
-						0, coeffs.GetLength(0),
-						(u, v) =>
-							BasisFunction(coeffs[u, v], u, v, x, y, coeffs.GetLength(0), coeffs.GetLength(1)) *
-							Alpha(u) * Alpha(v));
-
-				output[x, y] = sum * Beta(coeffs.GetLength(0), coeffs.GetLength(1));
+				sum += BasisFunction(coeffs[u, v], u, v, x, y, height, width) * Alpha(u) * Alpha(v);
 			}
+			
+			output[x, y] = sum * Beta(height, width);
 		}
 	}
 
