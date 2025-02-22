@@ -1,10 +1,11 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace JPEG.Huffman;
 
 public static class HuffmanCodec
 {
-	public static byte[] Encode(List<byte> data, out Dictionary<BitsWithLength, byte> decodeTable,
+	public static byte[] Encode(Span<byte> data, out Dictionary<BitsWithLength, byte> decodeTable,
 		out long bitsCount)
 	{
 		var frequences = CalcFrequences(data);
@@ -110,7 +111,7 @@ public static class HuffmanCodec
 		return queue.Dequeue();
 	}
 
-	private static int[] CalcFrequences(List<byte> data)
+	private static int[] CalcFrequences(Span<byte> data)
 	{
 		var result = new int[byte.MaxValue + 1];
 		foreach (var b in data)

@@ -30,7 +30,7 @@ internal class Matrix(int height, int width)
 					var g = Unsafe.Add(ref curr, 1);
 					var r = Unsafe.Add(ref curr, 2);
 					
-					matrix.Pixels[j, i] = new Pixel(r, g, b, PixelFormat.Rgb);
+					matrix.Pixels[j, i] = new Pixel(r, g, b);
 					curr = ref Unsafe.Add(ref curr, 3);
 				}
 			}
