@@ -6,7 +6,7 @@ namespace JPEG.Images;
 
 internal class Matrix(int height, int width)
 {
-	public readonly Pixel[,] Pixels = new Pixel[height, width];
+	public readonly Pixel[] Pixels = new Pixel[height*width];
 	public readonly int Height = height;
 	public readonly int Width = width;
 
@@ -19,20 +19,17 @@ internal class Matrix(int height, int width)
 
 		unsafe
 		{
+			var size = height * width;
 			ref var scan0 = ref Unsafe.AsRef<byte>(bData.Scan0.ToPointer());
 			
-			for (var j = 0; j < height; j++)
+			for (var j = 0; j < size; j++)
 			{
-				ref var curr = ref Unsafe.Add(ref scan0, j * bData.Stride);
-				for (var i = 0; i < width; i++)
-				{
-					var b = Unsafe.Add(ref curr, 0);
-					var g = Unsafe.Add(ref curr, 1);
-					var r = Unsafe.Add(ref curr, 2);
+				var b = Unsafe.Add(ref scan0, 0);
+				var g = Unsafe.Add(ref scan0, 1);
+				var r = Unsafe.Add(ref scan0, 2);
 					
-					matrix.Pixels[j, i] = new Pixel(r, g, b);
-					curr = ref Unsafe.Add(ref curr, 3);
-				}
+				matrix.Pixels[j] = new Pixel(r, g, b);
+				scan0 = ref Unsafe.Add(ref scan0, 3);
 			}
 		}
 
@@ -51,20 +48,17 @@ internal class Matrix(int height, int width)
 
 		unsafe
 		{
+			var size = height * width;
 			ref var scan0 = ref Unsafe.AsRef<byte>(bData.Scan0.ToPointer());
 			
-			for (var j = 0; j < height; j++)
+			for (var j = 0; j < size; j++)
 			{
-				ref var curr = ref Unsafe.Add(ref scan0, j * bData.Stride);
-				for (var i = 0; i < width; i++)
-				{
-					var pixel = matrix.Pixels[j, i];
-					Unsafe.Add(ref curr, 0) = ToByte(pixel.B);
-					Unsafe.Add(ref curr, 1) = ToByte(pixel.G);
-					Unsafe.Add(ref curr, 2) = ToByte(pixel.R);
+				var pixel = matrix.Pixels[j];
+				Unsafe.Add(ref scan0, 0) = ToByte(pixel.B);
+				Unsafe.Add(ref scan0, 1) = ToByte(pixel.G);
+				Unsafe.Add(ref scan0, 2) = ToByte(pixel.R);
 					
-					curr = ref Unsafe.Add(ref curr, 3);
-				}
+				scan0 = ref Unsafe.Add(ref scan0, 3);
 			}
 		}
 		

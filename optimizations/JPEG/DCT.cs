@@ -51,7 +51,7 @@ public static class Dct
 		}
 	}
 	
-	public static void DCT2D(double[,] input, double[,] output)
+	public static void DCT2D(Span<double> input, Span<double> output)
 	{
 		Span<double> buffer = stackalloc double[8];
 		Span<double> transformed = stackalloc double[8];
@@ -60,12 +60,12 @@ public static class Dct
 		{
 			for (var j = 0; j < 8; j++)
 			{
-				buffer[j] = input[i, j];
+				buffer[j] = input[i*8+j];
 			}
 			DCT1D(buffer, transformed);
 			for (var j = 0; j < 8; j++)
 			{
-				input[i, j] = transformed[j];
+				input[i*8+j] = transformed[j];
 			}
 		}
 
@@ -73,17 +73,17 @@ public static class Dct
 		{
 			for (var i = 0; i < 8; i++)
 			{
-				buffer[i] = input[i, j];
+				buffer[i] = input[i*8+j];
 			}
 			DCT1D(buffer, transformed);
 			for (var i = 0; i < 8; i++)
 			{
-				output[i, j] = transformed[i] * Beta;
+				output[i*8+j] = transformed[i] * Beta;
 			}
 		}
 	}
 
-	public static void IDCT2D(double[,] coeffs, double[,] output)
+	public static void IDCT2D(Span<double> coeffs, Span<double> output)
 	{
 		Span<double> buffer = stackalloc double[8];
 		Span<double> transformed = stackalloc double[8];
@@ -92,12 +92,12 @@ public static class Dct
 		{
 			for (var v = 0; v < 8; v++)
 			{
-				buffer[v] = coeffs[u, v] * Alpha[v];
+				buffer[v] = coeffs[u*8+v] * Alpha[v];
 			}
 			IDCT1D(buffer, transformed);
 			for (var y = 0; y < 8; y++)
 			{
-				coeffs[u, y] = transformed[y];
+				coeffs[u*8+y] = transformed[y];
 			}
 		}
 
@@ -105,12 +105,12 @@ public static class Dct
 		{
 			for (var u = 0; u < 8; u++)
 			{
-				buffer[u] = coeffs[u, y] * Alpha[u];
+				buffer[u] = coeffs[u*8+y] * Alpha[u];
 			}
 			IDCT1D(buffer, transformed);
 			for (var x = 0; x < 8; x++)
 			{
-				output[x, y] = transformed[x] * Beta;
+				output[x*8+y] = transformed[x] * Beta;
 			}
 		}
 	}
