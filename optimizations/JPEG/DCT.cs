@@ -7,6 +7,7 @@ public static class Dct
 {
 	private static readonly double[] Alpha = new double[8];
 	private static readonly double[,] Cosine = new double[8,8];
+	private static readonly double Beta = 1d / 8 + 1d / 8;
 	
 	static Dct()
 	{
@@ -21,53 +22,96 @@ public static class Dct
 			Cosine[x,u] = Math.Cos(((2d * x + 1d) * u * Math.PI) / (2 * 8));
 		}
 	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	private static void DCT1D(Span<double> input, Span<double> output)
+	{
+		for (var u = 0; u < 8; u++)
+		{
+			var sum = 0.0;
+			for (var x = 0; x < 8; x++)
+			{
+				sum += Cosine[x, u] * input[x];
+			}
+			output[u] = sum * Alpha[u];
+		}
+	}
+	
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static void IDCT1D(Span<double> input, Span<double> output)
+	{
+		for (var x = 0; x < 8; x++)
+		{
+			var sum = 0.0;
+			for (var u = 0; u < 8; u++)
+			{
+				sum += Cosine[x, u] * input[u];
+			}
+			output[x] = sum;
+		}
+	}
 	
 	public static void DCT2D(double[,] input, double[,] output)
 	{
-		var height = input.GetLength(0);
-		var width = input.GetLength(1);
-		var beta = Beta(height, width);
-		
-		for (var u = 0; u < width; u++)
-		for (var v = 0; v < height; v++)
+		Span<double> buffer = stackalloc double[8];
+		Span<double> transformed = stackalloc double[8];
+
+		for (var i = 0; i < 8; i++)
 		{
-			var sum = 0.0d;
-			for (var x = 0; x < width; x++)
-			for (var y = 0; y < height; y++)
+			for (var j = 0; j < 8; j++)
 			{
-				sum += BasisFunction(input[x, y], u, v, x, y);
+				buffer[j] = input[i, j];
 			}
-			
-			output[u, v] = sum * beta * Alpha[u] * Alpha[v];
+			DCT1D(buffer, transformed);
+			for (var j = 0; j < 8; j++)
+			{
+				input[i, j] = transformed[j];
+			}
+		}
+
+		for (var j = 0; j < 8; j++)
+		{
+			for (var i = 0; i < 8; i++)
+			{
+				buffer[i] = input[i, j];
+			}
+			DCT1D(buffer, transformed);
+			for (var i = 0; i < 8; i++)
+			{
+				output[i, j] = transformed[i] * Beta;
+			}
 		}
 	}
 
 	public static void IDCT2D(double[,] coeffs, double[,] output)
 	{
-		var height = coeffs.GetLength(0);
-		var width = coeffs.GetLength(1);
-		var beta = Beta(height, width);
-		
-		for (var x = 0; x < width; x++)
-		for (var y = 0; y < height; y++)
+		Span<double> buffer = stackalloc double[8];
+		Span<double> transformed = stackalloc double[8];
+
+		for (var u = 0; u < 8; u++)
 		{
-			var sum = 0.0d;
-			
-			for (var u = 0; u < width; u++)
-			for (var v = 0; v < height; v++)
+			for (var v = 0; v < 8; v++)
 			{
-				sum += BasisFunction(coeffs[u, v], u, v, x, y) * Alpha[u] * Alpha[v];
+				buffer[v] = coeffs[u, v] * Alpha[v];
 			}
-			
-			output[x, y] = sum * beta;
+			IDCT1D(buffer, transformed);
+			for (var y = 0; y < 8; y++)
+			{
+				coeffs[u, y] = transformed[y];
+			}
 		}
-	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private static double BasisFunction(double a, int u, int v, int x, int y) => Cosine[x,u] * Cosine[y,v] * a;
-
-	private static double Beta(int height, int width)
-	{
-		return 1d / width + 1d / height;
+		for (var y = 0; y < 8; y++)
+		{
+			for (var u = 0; u < 8; u++)
+			{
+				buffer[u] = coeffs[u, y] * Alpha[u];
+			}
+			IDCT1D(buffer, transformed);
+			for (var x = 0; x < 8; x++)
+			{
+				output[x, y] = transformed[x] * Beta;
+			}
+		}
 	}
 }
