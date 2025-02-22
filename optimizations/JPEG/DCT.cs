@@ -5,33 +5,33 @@ namespace JPEG;
 
 public static class Dct
 {
-	private const double B0 = 1.00000000000000000000;
-	private const double B1 = 0.72095982200694791383;
-	private const double B2 = 0.76536686473017954350;
-	private const double B3 = 0.85043009476725644878;
-	private const double B4 = 1.00000000000000000000;
-	private const double B5 = 1.27275858057283393842;
-	private const double B6 = 1.84775906502257351242;
-	private const double B7 = 3.62450978541155137218;
+	private const float B0 = 1.00000000000000000000f;
+	private const float B1 = 0.72095982200694791383f;
+	private const float B2 = 0.76536686473017954350f;
+	private const float B3 = 0.85043009476725644878f;
+	private const float B4 = 1.00000000000000000000f;
+	private const float B5 = 1.27275858057283393842f;
+	private const float B6 = 1.84775906502257351242f;
+	private const float B7 = 3.62450978541155137218f;
 
-	private const double A1 = 0.70710678118654752438;
-	private const double A5 = 0.38268343236508977170;
-	private const double A7 = 0.9238795325112867;
+	private const float A1 = 0.70710678118654752438f;
+	private const float A5 = 0.38268343236508977170f;
+	private const float A7 = 0.9238795325112867f;
 	
-	private static readonly double[] Scale =
+	private static readonly float[] Scale =
 	[
-		B0 * B0 * 0.125, B0 * B1 * 0.125, B0 * B2 * 0.125, B0 * B3 * 0.125, B0 * B4 * 0.125, B0 * B5 * 0.125, B0 * B6 * 0.125, B0 * B7 * 0.125,
-		B1 * B0 * 0.125, B1 * B1 * 0.125, B1 * B2 * 0.125, B1 * B3 * 0.125, B1 * B4 * 0.125, B1 * B5 * 0.125, B1 * B6 * 0.125, B1 * B7 * 0.125,
-		B2 * B0 * 0.125, B2 * B1 * 0.125, B2 * B2 * 0.125, B2 * B3 * 0.125, B2 * B4 * 0.125, B2 * B5 * 0.125, B2 * B6 * 0.125, B2 * B7 * 0.125,
-		B3 * B0 * 0.125, B3 * B1 * 0.125, B3 * B2 * 0.125, B3 * B3 * 0.125, B3 * B4 * 0.125, B3 * B5 * 0.125, B3 * B6 * 0.125, B3 * B7 * 0.125,
-		B4 * B0 * 0.125, B4 * B1 * 0.125, B4 * B2 * 0.125, B4 * B3 * 0.125, B4 * B4 * 0.125, B4 * B5 * 0.125, B4 * B6 * 0.125, B4 * B7 * 0.125,
-		B5 * B0 * 0.125, B5 * B1 * 0.125, B5 * B2 * 0.125, B5 * B3 * 0.125, B5 * B4 * 0.125, B5 * B5 * 0.125, B5 * B6 * 0.125, B5 * B7 * 0.125,
-		B6 * B0 * 0.125, B6 * B1 * 0.125, B6 * B2 * 0.125, B6 * B3 * 0.125, B6 * B4 * 0.125, B6 * B5 * 0.125, B6 * B6 * 0.125, B6 * B7 * 0.125,
-		B7 * B0 * 0.125, B7 * B1 * 0.125, B7 * B2 * 0.125, B7 * B3 * 0.125, B7 * B4 * 0.125, B7 * B5 * 0.125, B7 * B6 * 0.125, B7 * B7 * 0.125
+		B0 * B0 * 0.125f, B0 * B1 * 0.125f, B0 * B2 * 0.125f, B0 * B3 * 0.125f, B0 * B4 * 0.125f, B0 * B5 * 0.125f, B0 * B6 * 0.125f, B0 * B7 * 0.125f,
+		B1 * B0 * 0.125f, B1 * B1 * 0.125f, B1 * B2 * 0.125f, B1 * B3 * 0.125f, B1 * B4 * 0.125f, B1 * B5 * 0.125f, B1 * B6 * 0.125f, B1 * B7 * 0.125f,
+		B2 * B0 * 0.125f, B2 * B1 * 0.125f, B2 * B2 * 0.125f, B2 * B3 * 0.125f, B2 * B4 * 0.125f, B2 * B5 * 0.125f, B2 * B6 * 0.125f, B2 * B7 * 0.125f,
+		B3 * B0 * 0.125f, B3 * B1 * 0.125f, B3 * B2 * 0.125f, B3 * B3 * 0.125f, B3 * B4 * 0.125f, B3 * B5 * 0.125f, B3 * B6 * 0.125f, B3 * B7 * 0.125f,
+		B4 * B0 * 0.125f, B4 * B1 * 0.125f, B4 * B2 * 0.125f, B4 * B3 * 0.125f, B4 * B4 * 0.125f, B4 * B5 * 0.125f, B4 * B6 * 0.125f, B4 * B7 * 0.125f,
+		B5 * B0 * 0.125f, B5 * B1 * 0.125f, B5 * B2 * 0.125f, B5 * B3 * 0.125f, B5 * B4 * 0.125f, B5 * B5 * 0.125f, B5 * B6 * 0.125f, B5 * B7 * 0.125f,
+		B6 * B0 * 0.125f, B6 * B1 * 0.125f, B6 * B2 * 0.125f, B6 * B3 * 0.125f, B6 * B4 * 0.125f, B6 * B5 * 0.125f, B6 * B6 * 0.125f, B6 * B7 * 0.125f,
+		B7 * B0 * 0.125f, B7 * B1 * 0.125f, B7 * B2 * 0.125f, B7 * B3 * 0.125f, B7 * B4 * 0.125f, B7 * B5 * 0.125f, B7 * B6 * 0.125f, B7 * B7 * 0.125f
 	];
 	
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static void DCT2D(Span<double> input, Span<double> output)
+	public static void DCT2D(Span<float> input, Span<float> output)
 	{
 		for (var i = 0; i < 8; i++)
 		{
@@ -49,7 +49,7 @@ public static class Dct
 	
 	
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private static void DCT1D(Span<double> input, Span<double> output, int offset)
+	private static void DCT1D(Span<float> input, Span<float> output, int offset)
 	{
 		var tmp0 = input[0] + input[7];
 		var tmp7 = input[0] - input[7];
@@ -92,33 +92,33 @@ public static class Dct
 		output[7*8+offset] = z11 - z4;
 	}
 	
-	private const double iB0 = 1.0000000000000000000000;
-	private const double iB1 = 1.3870398453221474618216;
-	private const double iB2 = 1.3065629648763765278566;
-	private const double iB3 = 1.1758756024193587169745;
-	private const double iB4 = 1.0000000000000000000000;
-	private const double iB5 = 0.7856949583871021812779;
-	private const double iB6 = 0.5411961001461969843997;
-	private const double iB7 = 0.2758993792829430123360;
+	private const float iB0 = 1.0000000000000000000000f;
+	private const float iB1 = 1.3870398453221474618216f;
+	private const float iB2 = 1.3065629648763765278566f;
+	private const float iB3 = 1.1758756024193587169745f;
+	private const float iB4 = 1.0000000000000000000000f;
+	private const float iB5 = 0.7856949583871021812779f;
+	private const float iB6 = 0.5411961001461969843997f;
+	private const float iB7 = 0.2758993792829430123360f;
 	
-	private const double iA2 = 1.8477590650225735;
-	private const double iA4 = 1.4142135623730951;
-	private const double iAB4 = -0.7653668647301795;
+	private const float iA2 = 1.8477590650225735f;
+	private const float iA4 = 1.4142135623730951f;
+	private const float iAB4 = -0.7653668647301795f;
 	
-	private static readonly double[] IScale =
+	private static readonly float[] IScale =
 	[
-		iB0 * iB0 * 0.125, iB0 * iB1 * 0.125, iB0 * iB2 * 0.125, iB0 * iB3 * 0.125, iB0 * iB4 * 0.125, iB0 * iB5 * 0.125, iB0 * iB6 * 0.125, iB0 * iB7 * 0.125,
-		iB1 * iB0 * 0.125, iB1 * iB1 * 0.125, iB1 * iB2 * 0.125, iB1 * iB3 * 0.125, iB1 * iB4 * 0.125, iB1 * iB5 * 0.125, iB1 * iB6 * 0.125, iB1 * iB7 * 0.125,
-		iB2 * iB0 * 0.125, iB2 * iB1 * 0.125, iB2 * iB2 * 0.125, iB2 * iB3 * 0.125, iB2 * iB4 * 0.125, iB2 * iB5 * 0.125, iB2 * iB6 * 0.125, iB2 * iB7 * 0.125,
-		iB3 * iB0 * 0.125, iB3 * iB1 * 0.125, iB3 * iB2 * 0.125, iB3 * iB3 * 0.125, iB3 * iB4 * 0.125, iB3 * iB5 * 0.125, iB3 * iB6 * 0.125, iB3 * iB7 * 0.125,
-		iB4 * iB0 * 0.125, iB4 * iB1 * 0.125, iB4 * iB2 * 0.125, iB4 * iB3 * 0.125, iB4 * iB4 * 0.125, iB4 * iB5 * 0.125, iB4 * iB6 * 0.125, iB4 * iB7 * 0.125,
-		iB5 * iB0 * 0.125, iB5 * iB1 * 0.125, iB5 * iB2 * 0.125, iB5 * iB3 * 0.125, iB5 * iB4 * 0.125, iB5 * iB5 * 0.125, iB5 * iB6 * 0.125, iB5 * iB7 * 0.125,
-		iB6 * iB0 * 0.125, iB6 * iB1 * 0.125, iB6 * iB2 * 0.125, iB6 * iB3 * 0.125, iB6 * iB4 * 0.125, iB6 * iB5 * 0.125, iB6 * iB6 * 0.125, iB6 * iB7 * 0.125,
-		iB7 * iB0 * 0.125, iB7 * iB1 * 0.125, iB7 * iB2 * 0.125, iB7 * iB3 * 0.125, iB7 * iB4 * 0.125, iB7 * iB5 * 0.125, iB7 * iB6 * 0.125, iB7 * iB7 * 0.125
+		iB0 * iB0 * 0.125f, iB0 * iB1 * 0.125f, iB0 * iB2 * 0.125f, iB0 * iB3 * 0.125f, iB0 * iB4 * 0.125f, iB0 * iB5 * 0.125f, iB0 * iB6 * 0.125f, iB0 * iB7 * 0.125f,
+		iB1 * iB0 * 0.125f, iB1 * iB1 * 0.125f, iB1 * iB2 * 0.125f, iB1 * iB3 * 0.125f, iB1 * iB4 * 0.125f, iB1 * iB5 * 0.125f, iB1 * iB6 * 0.125f, iB1 * iB7 * 0.125f,
+		iB2 * iB0 * 0.125f, iB2 * iB1 * 0.125f, iB2 * iB2 * 0.125f, iB2 * iB3 * 0.125f, iB2 * iB4 * 0.125f, iB2 * iB5 * 0.125f, iB2 * iB6 * 0.125f, iB2 * iB7 * 0.125f,
+		iB3 * iB0 * 0.125f, iB3 * iB1 * 0.125f, iB3 * iB2 * 0.125f, iB3 * iB3 * 0.125f, iB3 * iB4 * 0.125f, iB3 * iB5 * 0.125f, iB3 * iB6 * 0.125f, iB3 * iB7 * 0.125f,
+		iB4 * iB0 * 0.125f, iB4 * iB1 * 0.125f, iB4 * iB2 * 0.125f, iB4 * iB3 * 0.125f, iB4 * iB4 * 0.125f, iB4 * iB5 * 0.125f, iB4 * iB6 * 0.125f, iB4 * iB7 * 0.125f,
+		iB5 * iB0 * 0.125f, iB5 * iB1 * 0.125f, iB5 * iB2 * 0.125f, iB5 * iB3 * 0.125f, iB5 * iB4 * 0.125f, iB5 * iB5 * 0.125f, iB5 * iB6 * 0.125f, iB5 * iB7 * 0.125f,
+		iB6 * iB0 * 0.125f, iB6 * iB1 * 0.125f, iB6 * iB2 * 0.125f, iB6 * iB3 * 0.125f, iB6 * iB4 * 0.125f, iB6 * iB5 * 0.125f, iB6 * iB6 * 0.125f, iB6 * iB7 * 0.125f,
+		iB7 * iB0 * 0.125f, iB7 * iB1 * 0.125f, iB7 * iB2 * 0.125f, iB7 * iB3 * 0.125f, iB7 * iB4 * 0.125f, iB7 * iB5 * 0.125f, iB7 * iB6 * 0.125f, iB7 * iB7 * 0.125f
 	];
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static void IDCT2D(Span<double> input, Span<double> output)
+	public static void IDCT2D(Span<float> input, Span<float> output)
 	{
 		for(var i = 0; i < 64; i++)
 		{
@@ -135,7 +135,7 @@ public static class Dct
 	}
 	
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static void IDCT1D(Span<double> input, Span<double> output, int offset)
+	public static void IDCT1D(Span<float> input, Span<float> output, int offset)
 	{
 		var s17= input[1] + input[7];
 		var d17= input[1] - input[7];
