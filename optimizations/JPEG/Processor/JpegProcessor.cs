@@ -51,7 +51,7 @@ public class JpegProcessor : IJpegProcessor
                 {
                     GetSubMatrix(matrix, y, DctSize, x, DctSize, selector, subMatrix);
                     ShiftMatrixValues(subMatrix, -128);
-                    DCT.DCT2D(subMatrix, channelFreqs);
+                    Dct.DCT2D(subMatrix, channelFreqs);
                     Quantize(channelFreqs, quant, quantizedFreqs);
                     ZigZagScan(quantizedFreqs, result);
                     allQuantizedBytes.AddRange(result);
@@ -92,7 +92,7 @@ public class JpegProcessor : IJpegProcessor
                     allQuantizedBytes.ReadExactly(quantizedBytes, 0, quantizedBytes.Length);
                     ZigZagUnScan(quantizedBytes, quantizedFreqs);
                     DeQuantize(quantizedFreqs, quant, channelFreqs);
-                    DCT.IDCT2D(channelFreqs, channel);
+                    Dct.IDCT2D(channelFreqs, channel);
                     ShiftMatrixValues(channel, 128);
                 }
 
