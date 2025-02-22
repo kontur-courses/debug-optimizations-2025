@@ -5,38 +5,40 @@ namespace JPEG.Huffman;
 internal class BitsBuffer
 {
     private List<byte> buffer = [];
-    private BitsWithLength unfinishedBits;
+    private int unfinishedBitsBits = 0;
+    private int unfinishedBitsBitsCount = 0;
 
     public void Add(BitsWithLength bitsWithLength)
     {
         var bitsCount = bitsWithLength.BitsCount;
         var bits = bitsWithLength.Bits;
 
-        int neededBits = 8 - unfinishedBits.BitsCount;
+        int neededBits = 8 - unfinishedBitsBitsCount;
+       
         while (bitsCount >= neededBits)
         {
             bitsCount -= neededBits;
-            buffer.Add((byte)((unfinishedBits.Bits << neededBits) + (bits >> bitsCount)));
+            buffer.Add((byte)((unfinishedBitsBits << neededBits) + (bits >> bitsCount)));
 
             bits &= ((1 << bitsCount) - 1);
 
-            unfinishedBits.Bits = 0;
-            unfinishedBits.BitsCount = 0;
+            unfinishedBitsBits = 0;
+            unfinishedBitsBitsCount = 0;
 
             neededBits = 8;
         }
 
-        unfinishedBits.BitsCount += bitsCount;
-        unfinishedBits.Bits = (unfinishedBits.Bits << bitsCount) + bits;
+        unfinishedBitsBitsCount += bitsCount;
+        unfinishedBitsBits = (unfinishedBitsBits << bitsCount) + bits;
     }
 
     public byte[] ToArray(out long bitsCount)
     {
-        bitsCount = buffer.Count * 8L + unfinishedBits.BitsCount;
+        bitsCount = buffer.Count * 8L + unfinishedBitsBitsCount;
         var result = new byte[bitsCount / 8 + (bitsCount % 8 > 0 ? 1 : 0)];
         buffer.CopyTo(result);
-        if (unfinishedBits.BitsCount > 0)
-            result[buffer.Count] = (byte)(unfinishedBits.Bits << (8 - unfinishedBits.BitsCount));
+        if (unfinishedBitsBitsCount > 0)
+            result[buffer.Count] = (byte)(unfinishedBitsBits << (8 - unfinishedBitsBitsCount));
         return result;
     }
 }

@@ -63,12 +63,12 @@ public class JpegProcessor : IJpegProcessor
             }
         }
 
-        var compressedBytes = HuffmanCodec.Encode(allQuantizedBytes, out var decodeTable, out var bitsCount);
+        var compressedBytes = HuffmanCodec.Encode(allQuantizedBytes, out var bitsCount,  out var root);
 
         return new CompressedImage
         {
-            Quality = quality, CompressedBytes = compressedBytes, BitsCount = bitsCount, DecodeTable = decodeTable,
-            Height = matrix.Height, Width = matrix.Width
+            Quality = quality, CompressedBytes = compressedBytes, BitsCount = bitsCount,
+            Height = matrix.Height, Width = matrix.Width, Huffman = root,
         };
     }
 
@@ -82,8 +82,8 @@ public class JpegProcessor : IJpegProcessor
         Span<double> channelFreqs = new double[BlockSize];
         Span<int> quant = GetQuantizationMatrix(image.Quality);
         var func = new[] { _y, cb, cr };
-
-        var allQuantizedBytes = HuffmanCodec.Decode(image.CompressedBytes, image.DecodeTable, image.BitsCount, length).AsSpan();
+        
+        var allQuantizedBytes = HuffmanCodec.Decode(image.CompressedBytes, image.BitsCount, length, image.Huffman);
         var index = 0;
         for (var y = 0; y < image.Height; y += DctSize)
         {
@@ -97,10 +97,12 @@ public class JpegProcessor : IJpegProcessor
                     index += BlockSize;
                 }
 
+                
                 SetPixels(result, _y, cb, cr, y, x);
+                
             }
         }
-
+        
         return result;
     }
 

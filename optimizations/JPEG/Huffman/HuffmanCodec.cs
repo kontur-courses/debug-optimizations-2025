@@ -5,56 +5,41 @@ namespace JPEG.Huffman;
 
 public static class HuffmanCodec
 {
-	public static byte[] Encode(Span<byte> data, out Dictionary<BitsWithLength, byte> decodeTable,
-		out long bitsCount)
+	public static byte[] Encode(Span<byte> data, out long bitsCount, out HuffmanNode root)
 	{
 		var frequences = CalcFrequences(data);
-		var root = BuildHuffmanTree(frequences);
-		
+		root = BuildHuffmanTree(frequences);
 		var encodeTable = new BitsWithLength[byte.MaxValue + 1];
 		FillEncodeTable(root, encodeTable);
 		
 		var bitsBuffer = new BitsBuffer();
 		foreach (var b in data)
 			bitsBuffer.Add(encodeTable[b]);
-
-		decodeTable = CreateDecodeTable(encodeTable);
+		
 		return bitsBuffer.ToArray(out bitsCount);
 	}
 
-	public static byte[] Decode(byte[] encodedData, Dictionary<BitsWithLength, byte> decodeTable, long bitsCount, int length)
+	public static Span<byte> Decode(byte[] encodedData, long bitsCount, int length, HuffmanNode root)
 	{
-		var result = new byte[length];
-		var index = 0;
-		var sample = new BitsWithLength { Bits = 0, BitsCount = 0 };
-		var byteNum = 0;
+		var result = new byte[length].AsSpan();
+		var resultIndex = 0;
+		var current = root;
+		long bitsProcessed = 0;
+
 		foreach (var b in encodedData)
 		{
-			for (var bitNum = 0; bitNum < 8 && byteNum * 8 + bitNum < bitsCount; bitNum++)
+			for (var i = 7; i >= 0 && bitsProcessed < bitsCount; i--)
 			{
-				sample.Bits = (sample.Bits << 1) | ((b >> (7 - bitNum)) & 1);
-				sample.BitsCount++;
+				var bit = (b >> i) & 1;
+				current = bit == 1 ? current.Left : current.Right;
+				bitsProcessed++;
 
-				if (decodeTable.TryGetValue(sample, out var decodedByte))
+				if (current.LeafLabel != null)
 				{
-					result[index++] = decodedByte;
-
-					sample = new BitsWithLength { Bits = 0, BitsCount = 0 };
+					result[resultIndex++] = current.LeafLabel.Value;
+					current = root;
 				}
 			}
-			byteNum++;
-		}
-
-		return result;
-	}
-
-	private static Dictionary<BitsWithLength, byte> CreateDecodeTable(BitsWithLength[] encodeTable)
-	{
-		var result = new Dictionary<BitsWithLength, byte>();
-		for (var b = 0; b < encodeTable.Length; b++)
-		{
-			var bitsWithLength = encodeTable[b];
-			result[bitsWithLength] = (byte)b;
 		}
 
 		return result;
@@ -65,7 +50,7 @@ public static class HuffmanCodec
 		while (true)
 		{
 			if (node.LeafLabel != null)
-				encodeSubstitutionTable[node.LeafLabel.Value] = new BitsWithLength { Bits = bitvector, BitsCount = depth };
+				encodeSubstitutionTable[node.LeafLabel.Value] = new BitsWithLength(bitvector, depth);
 			else
 			{
 				if (node.Left == null) return;

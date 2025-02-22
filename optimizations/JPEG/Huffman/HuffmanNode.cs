@@ -1,6 +1,6 @@
 ﻿namespace JPEG.Huffman;
 
-internal class HuffmanNode
+public class HuffmanNode
 {
     public byte? LeafLabel { get; set; }
     public int Frequency { get; set; }

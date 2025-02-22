@@ -1,3 +1,3 @@
 ﻿namespace JPEG.Huffman;
 
-public record struct BitsWithLength(int Bits, int BitsCount);
+public readonly record struct BitsWithLength(int Bits, int BitsCount);
