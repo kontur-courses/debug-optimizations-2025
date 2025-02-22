@@ -1,65 +1,85 @@
 ﻿using System.Drawing;
+using System.Drawing.Imaging;
+using System.Runtime.CompilerServices;
 
 namespace JPEG.Images;
 
-class Matrix
+internal class Matrix(int height, int width)
 {
-	public readonly Pixel[,] Pixels;
-	public readonly int Height;
-	public readonly int Width;
-
-	public Matrix(int height, int width)
-	{
-		Height = height;
-		Width = width;
-
-		Pixels = new Pixel[height, width];
-		for (var i = 0; i < height; ++i)
-		for (var j = 0; j < width; ++j)
-			Pixels[i, j] = new Pixel(0, 0, 0, PixelFormat.Rgb);
-	}
+	public readonly Pixel[,] Pixels = new Pixel[height, width];
+	public readonly int Height = height;
+	public readonly int Width = width;
 
 	public static explicit operator Matrix(Bitmap bmp)
 	{
 		var height = bmp.Height - bmp.Height % 8;
 		var width = bmp.Width - bmp.Width % 8;
 		var matrix = new Matrix(height, width);
+		var bData = bmp.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.ReadOnly, bmp.PixelFormat);
 
-		for (var j = 0; j < height; j++)
+		unsafe
 		{
-			for (var i = 0; i < width; i++)
+			ref var scan0 = ref Unsafe.AsRef<byte>(bData.Scan0.ToPointer());
+			
+			for (var j = 0; j < height; j++)
 			{
-				var pixel = bmp.GetPixel(i, j);
-				matrix.Pixels[j, i] = new Pixel(pixel.R, pixel.G, pixel.B, PixelFormat.Rgb);
+				ref var curr = ref Unsafe.Add(ref scan0, j * bData.Stride);
+				for (var i = 0; i < width; i++)
+				{
+					var b = Unsafe.Add(ref curr, 0);
+					var g = Unsafe.Add(ref curr, 1);
+					var r = Unsafe.Add(ref curr, 2);
+					
+					matrix.Pixels[j, i] = new Pixel(r, g, b, PixelFormat.Rgb);
+					curr = ref Unsafe.Add(ref curr, 3);
+				}
 			}
 		}
 
+		bmp.UnlockBits(bData);
+		
 		return matrix;
 	}
 
 	public static explicit operator Bitmap(Matrix matrix)
 	{
-		var bmp = new Bitmap(matrix.Width, matrix.Height);
+		var height = matrix.Height;
+		var width = matrix.Width;
+		var bmp = new Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
 
-		for (var j = 0; j < bmp.Height; j++)
+		var bData = bmp.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.WriteOnly, bmp.PixelFormat);
+
+		unsafe
 		{
-			for (var i = 0; i < bmp.Width; i++)
+			ref var scan0 = ref Unsafe.AsRef<byte>(bData.Scan0.ToPointer());
+			
+			for (var j = 0; j < height; j++)
 			{
-				var pixel = matrix.Pixels[j, i];
-				bmp.SetPixel(i, j, Color.FromArgb(ToByte(pixel.R), ToByte(pixel.G), ToByte(pixel.B)));
+				ref var curr = ref Unsafe.Add(ref scan0, j * bData.Stride);
+				for (var i = 0; i < width; i++)
+				{
+					var pixel = matrix.Pixels[j, i];
+					Unsafe.Add(ref curr, 0) = ToByte(pixel.B);
+					Unsafe.Add(ref curr, 1) = ToByte(pixel.G);
+					Unsafe.Add(ref curr, 2) = ToByte(pixel.R);
+					
+					curr = ref Unsafe.Add(ref curr, 3);
+				}
 			}
 		}
+		
+		bmp.UnlockBits(bData);
 
 		return bmp;
 	}
 
-	public static int ToByte(double d)
+	private static byte ToByte(double d)
 	{
-		var val = (int)d;
-		if (val > byte.MaxValue)
-			return byte.MaxValue;
-		if (val < byte.MinValue)
-			return byte.MinValue;
-		return val;
+		return d switch
+		{
+			> byte.MaxValue => byte.MaxValue,
+			< byte.MinValue => byte.MinValue,
+			_ => (byte)d
+		};
 	}
 }
