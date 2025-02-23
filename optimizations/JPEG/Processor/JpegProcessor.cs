@@ -52,12 +52,15 @@ public class JpegProcessor : IJpegProcessor
             {
                 var slice = allQuantizedBytes.Slice(index, RgbBlockSize);
                 GetSubMatrix(ref scan0, y,x,subMatrix);
+                
                 Dct.DCT2D(subMatrix.Slice(0,64), channelFreqs.Slice(0,64));
                 Dct.DCT2D(subMatrix.Slice(64,64), channelFreqs.Slice(64,64));
                 Dct.DCT2D(subMatrix.Slice(128,64), channelFreqs.Slice(128,64));
+                
                 Quantize(channelFreqs.Slice(0,64), quant, slice.Slice(0,64));
                 Quantize(channelFreqs.Slice(64,64), quant, slice.Slice(64,64));
                 Quantize(channelFreqs.Slice(128,64), quant, slice.Slice(128,64));
+                
                 index += RgbBlockSize;
             }
         }
@@ -131,6 +134,7 @@ public class JpegProcessor : IJpegProcessor
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static byte ToByte(double d)
     {
         return d switch

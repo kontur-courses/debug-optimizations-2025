@@ -1,25 +1,25 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace JPEG.Huffman;
 
 public static class HuffmanCodec
 {
-	public static byte[] Encode(Span<byte> data, out long bitsCount, out HuffmanNode root)
+	public static Span<byte> Encode(Span<byte> data, out long bitsCount, out HuffmanNode root)
 	{
 		var frequences = CalcFrequences(data);
 		root = BuildHuffmanTree(frequences);
 		var encodeTable = new BitsWithLength[byte.MaxValue + 1];
 		FillEncodeTable(root, encodeTable);
 		
-		var bitsBuffer = new BitsBuffer();
-		foreach (var b in data)
-			bitsBuffer.Add(encodeTable[b]);
+		var bitsBuffer = new BitsBuffer(data.Length);
+		bitsBuffer.Fill(data, encodeTable);
 		
 		return bitsBuffer.ToArray(out bitsCount);
 	}
 
-	public static Span<byte> Decode(byte[] encodedData, long bitsCount, int length, HuffmanNode root)
+	public static Span<byte> Decode(Span<byte> encodedData, long bitsCount, int length, HuffmanNode root)
 	{
 		var result = new byte[length].AsSpan();
 		var resultIndex = 0;
@@ -99,9 +99,48 @@ public static class HuffmanCodec
 	private static int[] CalcFrequences(Span<byte> data)
 	{
 		var result = new int[byte.MaxValue + 1];
-		foreach (var b in data)
+		var lenght = data.Length;
+		
+		ref var start = ref data.GetPinnableReference();
+		ref var end = ref Unsafe.Add(ref start, lenght);
+		
+		while (Unsafe.IsAddressLessThan(ref start, ref end))
 		{
-			result[b]++;
+			result[start]++;
+			start = ref Unsafe.Add(ref start, 1);
+			result[start]++;
+			start = ref Unsafe.Add(ref start, 1);
+			result[start]++;
+			start = ref Unsafe.Add(ref start, 1);
+			result[start]++;
+			start = ref Unsafe.Add(ref start, 1);
+		}
+		return result;
+	}
+	
+	private static int[] CalcFrequencesSkip(Span<byte> data)
+	{
+		var result = new int[byte.MaxValue + 1];
+		var lenght = data.Length;
+
+		for (var i = 0; i < 256; i++)
+		{
+			result[i] = 1;
+		}
+		
+		ref var start = ref data.GetPinnableReference();
+		ref var end = ref Unsafe.Add(ref start, lenght);
+		
+		while (Unsafe.IsAddressLessThan(ref start, ref end))
+		{
+			result[start]++;
+			start = ref Unsafe.Add(ref start, 16);
+			result[start]++;
+			start = ref Unsafe.Add(ref start, 16);
+			result[start]++;
+			start = ref Unsafe.Add(ref start, 16);
+			result[start]++;
+			start = ref Unsafe.Add(ref start, 16);
 		}
 		return result;
 	}

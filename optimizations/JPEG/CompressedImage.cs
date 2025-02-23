@@ -5,75 +5,58 @@ using JPEG.Huffman;
 
 namespace JPEG;
 
-public class CompressedImage
+public readonly ref struct CompressedImage
 {
-	public int Width { get; set; }
-	public int Height { get; set; }
+	public int Width { get; init; }
+	public int Height { get; init; }
 
-	public int Quality { get; set; }
+	public int Quality { get; init; }
 	
-	public HuffmanNode Huffman { get; set; }
+	public HuffmanNode Huffman { get; init; }
 
-	public long BitsCount { get; set; }
-	public byte[] CompressedBytes { get; set; }
+	public long BitsCount { get; init; }
+	public Span<byte> CompressedBytes { get; init; }
 
 	public void Save(string path)
 	{
-		using(var sw = new FileStream(path, FileMode.Create))
-		{
-			byte[] buffer;
-
-			buffer = BitConverter.GetBytes(Width);
-			sw.Write(buffer, 0, buffer.Length);
-
-			buffer = BitConverter.GetBytes(Height);
-			sw.Write(buffer, 0, buffer.Length);
-
-			buffer = BitConverter.GetBytes(Quality);
-			sw.Write(buffer, 0, buffer.Length);
+		using var sw = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.SequentialScan);
+		using var writer = new BinaryWriter(sw);
+		
+		writer.Write(Width);
+		writer.Write(Height);
+		writer.Write(Quality);
 			
-			SaveHuffmanTree(Huffman, sw);
+		SaveHuffmanTree(Huffman, sw);
 
-			buffer = BitConverter.GetBytes(BitsCount);
-			sw.Write(buffer, 0, buffer.Length);
-
-			buffer = BitConverter.GetBytes(CompressedBytes.Length);
-			sw.Write(buffer, 0, buffer.Length);
-
-			sw.Write(CompressedBytes, 0, CompressedBytes.Length);
-		}
+		writer.Write(BitsCount);
+		writer.Write(CompressedBytes.Length);
+		writer.Write(CompressedBytes);
 	}
 
 	public static CompressedImage Load(string path)
 	{
-		var result = new CompressedImage();
-		using(var sr = new FileStream(path, FileMode.Open))
-		{
-			byte[] buffer = new byte[8];
+		using var sr = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+		using var reader = new BinaryReader(sr);
 
-			sr.Read(buffer, 0, 4);
-			result.Width = BitConverter.ToInt32(buffer, 0);
+		var width = reader.ReadInt32();
+		var height = reader.ReadInt32();
+		var quality = reader.ReadInt32();
 
-			sr.Read(buffer, 0, 4);
-			result.Height = BitConverter.ToInt32(buffer, 0);
-
-			sr.Read(buffer, 0, 4);
-			result.Quality = BitConverter.ToInt32(buffer, 0);
 			
-			result.Huffman = LoadHuffmanTree(sr);
+		var root = LoadHuffmanTree(sr);
 
-			sr.Read(buffer, 0, 8);
-			result.BitsCount = BitConverter.ToInt64(buffer, 0);
+		var bitsCounts = reader.ReadInt64();
+		var compressedBytesCount = reader.ReadInt32();
 
-			sr.Read(buffer, 0, 4);
-			var compressedBytesCount = BitConverter.ToInt32(buffer, 0);
-
-			result.CompressedBytes = new byte[compressedBytesCount];
-			var totalRead = 0;
-			while(totalRead < compressedBytesCount)
-				totalRead += sr.Read(result.CompressedBytes, totalRead, compressedBytesCount - totalRead);
-		}
-		return result;
+		return new CompressedImage
+		{
+			Quality = quality,
+			Height = height,
+			Width = width,
+			BitsCount = bitsCounts,
+			Huffman = root,
+			CompressedBytes = reader.ReadBytes(compressedBytesCount)
+		};
 	}
 
 	private static void SaveHuffmanTree(HuffmanNode root, Stream stream)
