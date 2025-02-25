@@ -1,10 +1,11 @@
 using System;
+using System.IO;
 using System.Drawing;
 using System.Drawing.Imaging;
-using System.IO;
 using System.Runtime.CompilerServices;
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
 using JPEG.Huffman;
-using PixelFormat = System.Drawing.Imaging.PixelFormat;
 
 namespace JPEG.Processor;
 
@@ -14,7 +15,7 @@ public class JpegProcessor : IJpegProcessor
     public const int CompressionQuality = 70;
     private const int DctSize = 8;
     private const int BlockSize = DctSize * DctSize;
-    private const int RgbBlockSize = DctSize * DctSize * 3;
+    private const int RgbBlockSize = BlockSize * 3;
 
     public void Compress(string imagePath, string compressedImagePath)
     {
@@ -23,7 +24,6 @@ public class JpegProcessor : IJpegProcessor
         //Console.WriteLine($"{bmp.Width}x{bmp.Height} - {fileStream.Length / (1024.0 * 1024):F2} MB");
         var compressionResult = Compress(bmp, CompressionQuality);
         compressionResult.Save(compressedImagePath);
-        
     }
 
     public void Uncompress(string compressedImagePath, string uncompressedImagePath)
@@ -34,40 +34,42 @@ public class JpegProcessor : IJpegProcessor
         resultBmp.Save(uncompressedImagePath, ImageFormat.Bmp);
     }
 
-    private static unsafe CompressedImage Compress(Bitmap matrix, int quality = 50)
+    private static CompressedImage Compress(Bitmap bmp, int quality = 50)
     {
-        var index = 0;
+        using var matrix = new Matrix(bmp);
+
         var length = matrix.Height * matrix.Width * 3;
         Span<byte> allQuantizedBytes = new byte[length];
         Span<float> subMatrix = new float[RgbBlockSize];
         Span<float> channelFreqs = new float[RgbBlockSize];
-        Span<int> quant = GetQuantizationMatrix(quality);
+        Span<float> quantMatrix = ReverseInplace(GetQuantizationMatrix(quality));
+        Span<float> quantMatrixChrominance = ReverseInplace(GetQuantizationMatrixChrominance(quality));
 
-        var bmpData = matrix.LockBits(new Rectangle(0, 0, matrix.Width, matrix.Height), ImageLockMode.WriteOnly, matrix.PixelFormat);
-        ref var scan0 = ref Unsafe.AsRef<byte>(bmpData.Scan0.ToPointer());
-        
+        ref var slice = ref allQuantizedBytes.GetPinnableReference();
+        ref var sub = ref subMatrix.GetPinnableReference();
+        ref var freq = ref channelFreqs.GetPinnableReference();
+        ref var quant = ref quantMatrix.GetPinnableReference();
+        ref var quantChrominance = ref quantMatrixChrominance.GetPinnableReference();
+
         for (var y = 0; y < matrix.Height; y += DctSize)
         {
             for (var x = 0; x < matrix.Width; x += DctSize)
             {
-                var slice = allQuantizedBytes.Slice(index, RgbBlockSize);
-                GetSubMatrix(ref scan0, y,x,subMatrix);
-                
-                Dct.DCT2D(subMatrix.Slice(0,64), channelFreqs.Slice(0,64));
-                Dct.DCT2D(subMatrix.Slice(64,64), channelFreqs.Slice(64,64));
-                Dct.DCT2D(subMatrix.Slice(128,64), channelFreqs.Slice(128,64));
-                
-                Quantize(channelFreqs.Slice(0,64), quant, slice.Slice(0,64));
-                Quantize(channelFreqs.Slice(64,64), quant, slice.Slice(64,64));
-                Quantize(channelFreqs.Slice(128,64), quant, slice.Slice(128,64));
-                
-                index += RgbBlockSize;
+                matrix.GetSubMatrix(y, x, ref sub);
+                Dct.Dct2D(ref Unsafe.Add(ref sub, 0), ref Unsafe.Add(ref freq, 0));
+                Dct.Dct2D(ref Unsafe.Add(ref sub, 64), ref Unsafe.Add(ref freq, 64));
+                Dct.Dct2D(ref Unsafe.Add(ref sub, 128), ref Unsafe.Add(ref freq, 128));
+
+                Quantize(ref Unsafe.Add(ref freq, 0), ref quant, ref Unsafe.Add(ref slice, 0));
+                Quantize(ref Unsafe.Add(ref freq, 64), ref quantChrominance, ref Unsafe.Add(ref slice, 64));
+                Quantize(ref Unsafe.Add(ref freq, 128), ref quantChrominance, ref Unsafe.Add(ref slice, 128));
+
+                slice = ref Unsafe.Add(ref slice, RgbBlockSize);
             }
         }
-        matrix.UnlockBits(bmpData);
-        
-        var compressedBytes = HuffmanCodec.Encode(allQuantizedBytes, out var bitsCount,  out var root);
-        
+
+        var compressedBytes = HuffmanCodec.Encode(allQuantizedBytes, out var bitsCount, out var root);
+
         return new CompressedImage
         {
             Quality = quality, CompressedBytes = compressedBytes, BitsCount = bitsCount,
@@ -75,136 +77,163 @@ public class JpegProcessor : IJpegProcessor
         };
     }
 
-    private static unsafe Bitmap Uncompress(CompressedImage image)
+    private static Bitmap Uncompress(CompressedImage image)
     {
-        var matrix = new Bitmap(image.Width, image.Height, PixelFormat.Format24bppRgb);
-        
+        using var matrix = new Matrix(image.Width, image.Height);
         var length = image.Height * image.Width * 3;
-        var _y = new float[BlockSize];
-        var cb = new float[BlockSize];
-        var cr = new float[BlockSize];
-        Span<float> channelFreqs = new float[BlockSize];
-        Span<int> quant = GetQuantizationMatrix(image.Quality);
-        var func = new[] { _y, cb, cr };
+        
+        Span<float> subMatrix = new float[RgbBlockSize];
+        Span<float> channelFreqs = new float[RgbBlockSize];
+        Span<float> quantMatrix = GetQuantizationMatrix(image.Quality);
+        Span<float> quantMatrixChrominance = GetQuantizationMatrixChrominance(image.Quality);
+        
+        ref var sub = ref subMatrix.GetPinnableReference();
+        ref var freq = ref channelFreqs.GetPinnableReference();
+        ref var quant = ref quantMatrix.GetPinnableReference();
+        ref var quantChrominance = ref quantMatrixChrominance.GetPinnableReference();
         
         var allQuantizedBytes = HuffmanCodec.Decode(image.CompressedBytes, image.BitsCount, length, image.Huffman);
-        var index = 0;
-        
-        var bmpData = matrix.LockBits(new Rectangle(0, 0, matrix.Width, matrix.Height), ImageLockMode.WriteOnly, matrix.PixelFormat);
-        ref var scan0 = ref Unsafe.AsRef<byte>(bmpData.Scan0.ToPointer());
-        
+        ref var quantizedBytesRef = ref Unsafe.As<byte, sbyte>(ref allQuantizedBytes.GetPinnableReference());
+
         for (var y = 0; y < image.Height; y += DctSize)
         {
             for (var x = 0; x < image.Width; x += DctSize)
             {
-                foreach (var channel in func)
-                {
-                    var quantizedBytes = allQuantizedBytes.Slice(index, BlockSize);
-                    DeQuantize(quantizedBytes, quant, channelFreqs);
-                    Dct.IDCT2D(channelFreqs, channel); 
-                    index += BlockSize;
-                }
+                DeQuantize(ref quantizedBytesRef, ref quant, ref freq);
+                DeQuantize(ref Unsafe.Add(ref quantizedBytesRef, 64), ref quantChrominance, ref Unsafe.Add(ref freq, 64));
+                DeQuantize(ref Unsafe.Add(ref quantizedBytesRef, 128), ref quantChrominance, ref Unsafe.Add(ref freq, 128));
                 
-                SetPixels(ref scan0, _y, cb, cr, y, x);
+                Dct.InverseDct2D(ref freq, ref sub);
+                Dct.InverseDct2D(ref Unsafe.Add(ref freq, 64), ref Unsafe.Add(ref sub, 64));
+                Dct.InverseDct2D(ref Unsafe.Add(ref freq, 128), ref Unsafe.Add(ref sub, 128));
+                
+                matrix.SetPixels(ref sub, y, x);
+                
+                quantizedBytesRef = ref Unsafe.Add(ref quantizedBytesRef, RgbBlockSize);
             }
         }
-        matrix.UnlockBits(bmpData);
-        
-        return matrix;
-    }
 
-    private static void SetPixels(ref byte scan0, Span<float> a, Span<float> b, Span<float> c,
-        int yOffset, int xOffset)
+        //matrix.ApplyDeblockingFilter();
+        
+        return matrix.ToBitmap();
+    }
+    
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void Quantize(ref float freq, ref float pQuantRev, ref byte output)
     {
-        for (var y = 0; y < DctSize; y++)
-        {
-            ref var matrix = ref Unsafe.Add(ref scan0, (xOffset + (yOffset + y) * 1024) * 3);
-            for (var x = 0; x < DctSize; x++)
-            {
-                var Y = a[y*8+x] + 128;
-                var Cb= b[y*8+x] + 128;
-                var Cr= c[y*8+x] + 128;
-            
-                Unsafe.Add(ref matrix, 0) = ToByte((298.082 * Y + 516.412 * Cb) / 256.0 - 276.836);
-                Unsafe.Add(ref matrix, 1) = ToByte((298.082 * Y - 100.291 * Cb - 208.120 * Cr) / 256.0 + 135.576);
-                Unsafe.Add(ref matrix, 2) = ToByte((298.082 * Y + 408.583 * Cr) / 256.0 - 222.921);
-					
-                matrix = ref Unsafe.Add(ref matrix, 3);
-            }
-        }
+        var permutationMask = Vector256.Create(0, 4, 1, 5, 2, 6, 3, 7);
+
+        var mul0 = Vector256.LoadUnsafe(ref freq, 0) * Vector256.LoadUnsafe(ref pQuantRev, 0);
+        var mul1 = Vector256.LoadUnsafe(ref freq, 8) * Vector256.LoadUnsafe(ref pQuantRev, 8);
+        var mul2 = Vector256.LoadUnsafe(ref freq, 16) * Vector256.LoadUnsafe(ref pQuantRev, 16);
+        var mul3 = Vector256.LoadUnsafe(ref freq, 24) * Vector256.LoadUnsafe(ref pQuantRev, 24);
+        var mul4 = Vector256.LoadUnsafe(ref freq, 32) * Vector256.LoadUnsafe(ref pQuantRev, 32);
+        var mul5 = Vector256.LoadUnsafe(ref freq, 40) * Vector256.LoadUnsafe(ref pQuantRev, 40);
+        var mul6 = Vector256.LoadUnsafe(ref freq, 48) * Vector256.LoadUnsafe(ref pQuantRev, 48);
+        var mul7 = Vector256.LoadUnsafe(ref freq, 56) * Vector256.LoadUnsafe(ref pQuantRev, 56);
+
+        var masked0 = Avx.ConvertToVector256Int32(mul0);
+        var masked1 = Avx.ConvertToVector256Int32(mul1);
+        var tmp0 = Avx2.PackSignedSaturate(masked0, masked1);
+
+        var masked2 = Avx.ConvertToVector256Int32(mul2);
+        var masked3 = Avx.ConvertToVector256Int32(mul3);
+        var tmp1 = Avx2.PackSignedSaturate(masked2, masked3);
+
+        var masked4 = Avx.ConvertToVector256Int32(mul4);
+        var masked5 = Avx.ConvertToVector256Int32(mul5);
+        var tmp2 = Avx2.PackSignedSaturate(masked4, masked5);
+
+        var masked6 = Avx.ConvertToVector256Int32(mul6);
+        var masked7 = Avx.ConvertToVector256Int32(mul7);
+        var tmp3 = Avx2.PackSignedSaturate(masked6, masked7);
+
+        var result = Avx2.PackSignedSaturate(tmp0, tmp1);
+        var result2 = Avx2.PackSignedSaturate(tmp2, tmp3);
+
+        Avx2.PermuteVar8x32(result.AsSingle(), permutationMask).AsByte().StoreUnsafe(ref output);
+        Avx2.PermuteVar8x32(result2.AsSingle(), permutationMask).AsByte().StoreUnsafe(ref output, 32);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static byte ToByte(double d)
+    private static void DeQuantize(ref sbyte quantizedBytes, ref float quant, ref float output)
     {
-        return d switch
+        for (UIntPtr i = 0; i < 64; i += 8)
         {
-            > byte.MaxValue => byte.MaxValue,
-            < byte.MinValue => byte.MinValue,
-            _ => (byte)d
-        };
-    }
+            var byteVec = Avx2.ConvertToVector256Int32(Vector128.LoadUnsafe(ref quantizedBytes, i));
+            var floatVec = Avx.ConvertToVector256Single(byteVec);
+            var quantVec = Vector256.LoadUnsafe(ref quant, i);
+            var result = floatVec * quantVec;
 
-    private static void GetSubMatrix(ref byte bmp, int yOffset, int xOffset, Span<float> subMatrix)
-    {
-        for (var j = 0; j < DctSize; j++)
-        {
-            ref var matrix = ref Unsafe.Add(ref bmp, (xOffset + (yOffset + j) * 1024) * 3);
-            for (var i = 0; i < DctSize; i++)
-            {
-                var b = Unsafe.Add(ref matrix, 0);
-                var g = Unsafe.Add(ref matrix, 1);
-                var r = Unsafe.Add(ref matrix, 2);
-
-                subMatrix[j * 8 + i] = -112f + (65.738f * r + 129.057f * g + 24.064f * b) / 256.0f;
-                subMatrix[j * 8 + i + 64] = (-37.945f * r - 74.494f * g + 112.439f * b) / 256.0f;
-                subMatrix[j * 8 + i + 128] = (112.439f * r - 94.154f * g - 18.285f * b) / 256.0f;
-
-                matrix = ref Unsafe.Add(ref matrix, 3);
-            }
+            result.StoreUnsafe(ref output, i);
         }
     }
 
-    private static void Quantize(Span<float> channelFreqs, Span<int> quantizationMatrix, Span<byte> output)
+    private static float[] GetQuantizationMatrix(int quality)
     {
-        for (var y = 0; y < BlockSize; y++)
+        if (quality is < 1 or > 99)
+            throw new ArgumentException("quality must be in [1,99] interval");
+
+        var multiplier = quality < 50 ? 5000 / quality : 200 - 2 * quality;
+        
+        var result = new float[64];
+
+        for (var y = 0; y < 64; y++)
         {
-            output[y] = (byte)(channelFreqs[y] / quantizationMatrix[y]);
+            result[y] = Math.Max(10, Math.Min((multiplier * LuminanceTable[y] + 50) / 100f, 255));
         }
+
+        return result;
     }
 
-    private static void DeQuantize(Span<byte> quantizedBytes, Span<int> quant, Span<float> output)
-    {
-        for (var y = 0; y < BlockSize; y++)
-        {
-            output[y] = ((sbyte)quantizedBytes[y]) * quant[y]; //NOTE cast to sbyte not to loose negative numbers
-        }
-    }
-
-    private static int[] GetQuantizationMatrix(int quality)
+    private static float[] GetQuantizationMatrixChrominance(int quality)
     {
         if (quality is < 1 or > 99)
             throw new ArgumentException("quality must be in [1,99] interval");
 
         var multiplier = quality < 50 ? 5000 / quality : 200 - 2 * quality;
 
-        var result = new[]
-        {
-            16, 11, 10, 16, 24, 40, 51, 61 ,
-            12, 12, 14, 19, 26, 58, 60, 55 ,
-            14, 13, 16, 24, 40, 57, 69, 56 ,
-            14, 17, 22, 29, 51, 87, 80, 62 ,
-            18, 22, 37, 56, 68, 109, 103, 77 ,
-            24, 35, 55, 64, 81, 104, 113, 92 ,
-            49, 64, 78, 87, 103, 121, 120, 101 ,
-            72, 92, 95, 98, 112, 100, 103, 99
-        };
+        var result = new float[64];
 
-        for (var y = 0; y < BlockSize; y++)
+        for (var y = 0; y < 64; y++)
         {
-            result[y] = (multiplier * result[y] + 50) / 100;
+            result[y] = Math.Max(16, Math.Min((multiplier * ChrominanceTable[y] + 50) / 100f, 255));
         }
 
         return result;
     }
+
+    private static float[] ReverseInplace(float[] matrix)
+    {
+        for (var y = 0; y < 64; y++)
+        {
+            matrix[y] = 1f / matrix[y];
+        }
+
+        return matrix;
+    }
+    
+    private static readonly int[] LuminanceTable =
+    [
+        16, 11, 10, 16, 24, 40, 51, 61,
+        12, 12, 14, 19, 26, 58, 60, 55,
+        14, 13, 16, 24, 40, 57, 69, 56,
+        14, 17, 22, 29, 51, 87, 80, 62,
+        18, 22, 37, 56, 68, 109, 103, 77,
+        24, 35, 55, 64, 81, 104, 113, 92,
+        49, 64, 78, 87, 103, 121, 120, 101,
+        72, 92, 95, 98, 112, 100, 103, 99
+    ];
+    
+    private static readonly int[] ChrominanceTable =
+    [
+        17, 18, 24, 47, 99, 99, 99, 99,
+        18, 21, 26, 66, 99, 99, 99, 99,
+        24, 26, 56, 99, 99, 99, 99, 99,
+        47, 66, 99, 99, 99, 99, 99, 99,
+        99, 99, 99, 99, 99, 99, 99, 99,
+        99, 99, 99, 99, 99, 99, 99, 99,
+        99, 99, 99, 99, 99, 99, 99, 99,
+        99, 99, 99, 99, 99, 99, 99, 99
+    ];
 }

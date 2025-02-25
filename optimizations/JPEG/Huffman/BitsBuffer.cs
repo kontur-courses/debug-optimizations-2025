@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Buffers.Binary;
-using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -27,7 +26,7 @@ internal class BitsBuffer(int maxLenght)
         var bitsInBuffer = unfinishedBitsBitsCount;
 
         ref var pBufferRef = ref MemoryMarshal.GetArrayDataReference(buffer);
-        ref var tableRef = ref MemoryMarshal.GetReference(encodeTable.AsSpan());
+        ref var tableRef = ref MemoryMarshal.GetArrayDataReference(encodeTable);
         var written = 0;
         
         foreach (var b in data)
@@ -39,13 +38,13 @@ internal class BitsBuffer(int maxLenght)
             bitBuffer = (bitBuffer << bitsLength) | (uint)bitsVal;
             bitsInBuffer += bitsLength;
 
-            if (bitsInBuffer <= 48) continue;
+            if (bitsInBuffer <= 32) continue;
 
-            var value48 = BinaryPrimitives.ReverseEndianness(bitBuffer >> (bitsInBuffer - 48)) >> 16;
+            var value48 = BinaryPrimitives.ReverseEndianness(bitBuffer >> (bitsInBuffer - 32)) >> 32;
             Unsafe.WriteUnaligned(ref Unsafe.Add(ref pBufferRef, written), value48);
             
-            written += 6;
-            bitsInBuffer -= 48;
+            written += 4;
+            bitsInBuffer -= 32;
             bitBuffer &= (1UL << bitsInBuffer) - 1;
         }
 
