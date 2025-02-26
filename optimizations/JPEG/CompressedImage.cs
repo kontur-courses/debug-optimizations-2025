@@ -41,8 +41,7 @@ public readonly ref struct CompressedImage
 		var width = reader.ReadInt32();
 		var height = reader.ReadInt32();
 		var quality = reader.ReadInt32();
-
-			
+		
 		var root = LoadHuffmanTree(sr);
 
 		var bitsCounts = reader.ReadInt64();

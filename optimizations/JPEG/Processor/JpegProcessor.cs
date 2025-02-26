@@ -15,13 +15,11 @@ public class JpegProcessor : IJpegProcessor
     public const int CompressionQuality = 70;
     private const int DctSize = 8;
     private const int BlockSize = DctSize * DctSize;
-    private const int RgbBlockSize = BlockSize * 3;
+    private const int YuvBlockSize = BlockSize * 2;
 
     public void Compress(string imagePath, string compressedImagePath)
     {
-        using var fileStream = File.OpenRead(imagePath);
-        using var bmp = (Bitmap)Image.FromStream(fileStream, false, false);
-        //Console.WriteLine($"{bmp.Width}x{bmp.Height} - {fileStream.Length / (1024.0 * 1024):F2} MB");
+        using var bmp = new Bitmap(imagePath);
         var compressionResult = Compress(bmp, CompressionQuality);
         compressionResult.Save(compressedImagePath);
     }
@@ -38,10 +36,10 @@ public class JpegProcessor : IJpegProcessor
     {
         using var matrix = new Matrix(bmp);
 
-        var length = matrix.Height * matrix.Width * 3;
+        var length = matrix.Height * matrix.Width * 2;
         Span<byte> allQuantizedBytes = new byte[length];
-        Span<float> subMatrix = new float[RgbBlockSize];
-        Span<float> channelFreqs = new float[RgbBlockSize];
+        Span<float> subMatrix = new float[YuvBlockSize];
+        Span<float> channelFreqs = new float[YuvBlockSize];
         Span<float> quantMatrix = ReverseInplace(GetQuantizationMatrix(quality));
         Span<float> quantMatrixChrominance = ReverseInplace(GetQuantizationMatrixChrominance(quality));
 
@@ -56,15 +54,13 @@ public class JpegProcessor : IJpegProcessor
             for (var x = 0; x < matrix.Width; x += DctSize)
             {
                 matrix.GetSubMatrix(y, x, ref sub);
-                Dct.Dct2D(ref Unsafe.Add(ref sub, 0), ref Unsafe.Add(ref freq, 0));
-                Dct.Dct2D(ref Unsafe.Add(ref sub, 64), ref Unsafe.Add(ref freq, 64));
-                Dct.Dct2D(ref Unsafe.Add(ref sub, 128), ref Unsafe.Add(ref freq, 128));
+                Dct.Dct2D(ref sub, ref freq);
+                Dct.Dct2D422(ref Unsafe.Add(ref sub, 64), ref Unsafe.Add(ref freq, 64));
 
-                Quantize(ref Unsafe.Add(ref freq, 0), ref quant, ref Unsafe.Add(ref slice, 0));
+                Quantize(ref freq, ref quant, ref slice);
                 Quantize(ref Unsafe.Add(ref freq, 64), ref quantChrominance, ref Unsafe.Add(ref slice, 64));
-                Quantize(ref Unsafe.Add(ref freq, 128), ref quantChrominance, ref Unsafe.Add(ref slice, 128));
 
-                slice = ref Unsafe.Add(ref slice, RgbBlockSize);
+                slice = ref Unsafe.Add(ref slice, 128);
             }
         }
 
@@ -80,44 +76,42 @@ public class JpegProcessor : IJpegProcessor
     private static Bitmap Uncompress(CompressedImage image)
     {
         using var matrix = new Matrix(image.Width, image.Height);
-        var length = image.Height * image.Width * 3;
-        
-        Span<float> subMatrix = new float[RgbBlockSize];
-        Span<float> channelFreqs = new float[RgbBlockSize];
+        var length = image.Height * image.Width * 2;
+
+        Span<float> subMatrix = new float[YuvBlockSize];
+        Span<float> channelFreqs = new float[YuvBlockSize];
         Span<float> quantMatrix = GetQuantizationMatrix(image.Quality);
         Span<float> quantMatrixChrominance = GetQuantizationMatrixChrominance(image.Quality);
-        
+
         ref var sub = ref subMatrix.GetPinnableReference();
         ref var freq = ref channelFreqs.GetPinnableReference();
         ref var quant = ref quantMatrix.GetPinnableReference();
         ref var quantChrominance = ref quantMatrixChrominance.GetPinnableReference();
-        
+
         var allQuantizedBytes = HuffmanCodec.Decode(image.CompressedBytes, image.BitsCount, length, image.Huffman);
         ref var quantizedBytesRef = ref Unsafe.As<byte, sbyte>(ref allQuantizedBytes.GetPinnableReference());
-
+        
         for (var y = 0; y < image.Height; y += DctSize)
         {
             for (var x = 0; x < image.Width; x += DctSize)
             {
                 DeQuantize(ref quantizedBytesRef, ref quant, ref freq);
                 DeQuantize(ref Unsafe.Add(ref quantizedBytesRef, 64), ref quantChrominance, ref Unsafe.Add(ref freq, 64));
-                DeQuantize(ref Unsafe.Add(ref quantizedBytesRef, 128), ref quantChrominance, ref Unsafe.Add(ref freq, 128));
-                
+
                 Dct.InverseDct2D(ref freq, ref sub);
-                Dct.InverseDct2D(ref Unsafe.Add(ref freq, 64), ref Unsafe.Add(ref sub, 64));
-                Dct.InverseDct2D(ref Unsafe.Add(ref freq, 128), ref Unsafe.Add(ref sub, 128));
-                
+                Dct.InverseDct2D422(ref Unsafe.Add(ref freq, 64), ref Unsafe.Add(ref sub, 64));
+
                 matrix.SetPixels(ref sub, y, x);
-                
-                quantizedBytesRef = ref Unsafe.Add(ref quantizedBytesRef, RgbBlockSize);
+
+                quantizedBytesRef = ref Unsafe.Add(ref quantizedBytesRef, 128);
             }
         }
 
         //matrix.ApplyDeblockingFilter();
-        
+
         return matrix.ToBitmap();
     }
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void Quantize(ref float freq, ref float pQuantRev, ref byte output)
     {
@@ -162,9 +156,9 @@ public class JpegProcessor : IJpegProcessor
         {
             var byteVec = Avx2.ConvertToVector256Int32(Vector128.LoadUnsafe(ref quantizedBytes, i));
             var floatVec = Avx.ConvertToVector256Single(byteVec);
+
             var quantVec = Vector256.LoadUnsafe(ref quant, i);
             var result = floatVec * quantVec;
-
             result.StoreUnsafe(ref output, i);
         }
     }
@@ -175,7 +169,7 @@ public class JpegProcessor : IJpegProcessor
             throw new ArgumentException("quality must be in [1,99] interval");
 
         var multiplier = quality < 50 ? 5000 / quality : 200 - 2 * quality;
-        
+
         var result = new float[64];
 
         for (var y = 0; y < 64; y++)
@@ -197,7 +191,7 @@ public class JpegProcessor : IJpegProcessor
 
         for (var y = 0; y < 64; y++)
         {
-            result[y] = Math.Max(16, Math.Min((multiplier * ChrominanceTable[y] + 50) / 100f, 255));
+            result[y] = Math.Max(10, Math.Min((multiplier * ChrominanceTable[y] + 50) / 100f, 255));
         }
 
         return result;
@@ -212,7 +206,7 @@ public class JpegProcessor : IJpegProcessor
 
         return matrix;
     }
-    
+
     private static readonly int[] LuminanceTable =
     [
         16, 11, 10, 16, 24, 40, 51, 61,
@@ -224,16 +218,16 @@ public class JpegProcessor : IJpegProcessor
         49, 64, 78, 87, 103, 121, 120, 101,
         72, 92, 95, 98, 112, 100, 103, 99
     ];
-    
+
     private static readonly int[] ChrominanceTable =
     [
-        17, 18, 24, 47, 99, 99, 99, 99,
-        18, 21, 26, 66, 99, 99, 99, 99,
-        24, 26, 56, 99, 99, 99, 99, 99,
-        47, 66, 99, 99, 99, 99, 99, 99,
+        17, 24, 99, 99, 17, 24, 99, 99,
+        18, 26, 99, 99, 18, 26, 99, 99,
+        24, 56, 99, 99, 24, 56, 99, 99,
+        47, 99, 99, 99, 47, 99, 99, 99,
         99, 99, 99, 99, 99, 99, 99, 99,
         99, 99, 99, 99, 99, 99, 99, 99,
         99, 99, 99, 99, 99, 99, 99, 99,
-        99, 99, 99, 99, 99, 99, 99, 99
+        99, 99, 99, 99, 99, 99, 99, 99,
     ];
 }

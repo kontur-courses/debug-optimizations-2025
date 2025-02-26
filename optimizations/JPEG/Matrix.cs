@@ -114,8 +114,9 @@ public sealed class Matrix : IDisposable
     private static readonly Vector256<float> vCrFirst = Vector256.Create(0.43921484375f);
     private static readonly Vector256<float> vCrSecond = Vector256.Create(-0.3677890625f);
     private static readonly Vector256<float> vCrThird = Vector256.Create(-0.07142578125f);
+    private static Vector256<float> Half =      Vector256.Create(0.5f);
     private const nint Bound4 = 4;
-
+    private static Vector256<int> controlMask = Vector256.Create(0, 2, 4, 6, 1, 3, 5, 7);
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void GetSubMatrix(int yOffset, int xOffset, ref float output)
     {
@@ -164,9 +165,10 @@ public sealed class Matrix : IDisposable
             var Cr = Vector256.FusedMultiplyAdd(vCrThird, bLower,
                 Vector256.FusedMultiplyAdd(vCrSecond, gLower, Vector256.Multiply(vCrFirst, rLower)));
 
+            var cbcr = Avx.Multiply(Avx2.PermuteVar8x32(Avx.UnpackHigh(Avx.HorizontalAdd(Cb, Cb), Avx.HorizontalAdd(Cr, Cr)), controlMask), Half);
             Y.StoreUnsafe(ref output);
-            Cb.StoreUnsafe(ref output, 64);
-            Cr.StoreUnsafe(ref output, 128);
+            cbcr.StoreUnsafe(ref output, 64);
+            
 
             Y = Vector256.FusedMultiplyAdd(vYThird, bHigh,
                 Vector256.FusedMultiplyAdd(vYSecond, gHigh, Vector256.FusedMultiplyAdd(vYFirst, rHigh, vRConst)));
@@ -175,9 +177,10 @@ public sealed class Matrix : IDisposable
             Cr = Vector256.FusedMultiplyAdd(vCrThird, bHigh,
                 Vector256.FusedMultiplyAdd(vCrSecond, gHigh, Vector256.Multiply(vCrFirst, rHigh)));
 
+            cbcr = Avx.Multiply(Avx2.PermuteVar8x32(Avx.UnpackHigh(Avx.HorizontalAdd(Cb, Cb), Avx.HorizontalAdd(Cr, Cr)), controlMask), Half);
+
             Y.StoreUnsafe(ref output, 8);
-            Cb.StoreUnsafe(ref output, 72);
-            Cr.StoreUnsafe(ref output, 136);
+            cbcr.StoreUnsafe(ref output, 72);
 
             output = ref Unsafe.Add(ref output, 16);
         }
@@ -203,9 +206,24 @@ public sealed class Matrix : IDisposable
         for (nint i = 0; i < Bound4; i++)
         {
             var yVec = Vector256.LoadUnsafe(ref Unsafe.Add(ref sub, 0));
-            var cbVec = Vector256.LoadUnsafe(ref Unsafe.Add(ref sub, 64));
-            var crVec = Vector256.LoadUnsafe(ref Unsafe.Add(ref sub, 128));
+            var cbcr = Vector256.LoadUnsafe(ref Unsafe.Add(ref sub, 64));
 
+
+            var lowerHalf = Avx.ExtractVector128(cbcr, 0);
+            var upperHalf = Avx.ExtractVector128(cbcr, 1);
+
+            var mask = Vector256.Create(0, 0, 1, 1, 2, 2, 3, 3);
+
+            var cbVec = Avx2.PermuteVar8x32(
+                Avx.InsertVector128(Vector256<float>.Zero, lowerHalf, 0),
+                mask
+            );
+
+            var crVec = Avx2.PermuteVar8x32(
+                Avx.InsertVector128(Vector256<float>.Zero, upperHalf, 0),
+                mask
+            );
+            
             yVec = Avx.Add(yVec, Const128);
             cbVec = Avx.Add(cbVec, Const128);
             crVec = Avx.Add(crVec, Const128);
@@ -216,8 +234,20 @@ public sealed class Matrix : IDisposable
             var b = (yScaled + Const408 * crVec) * Const256 - Const222;
 
             var yVec2 = Vector256.LoadUnsafe(ref Unsafe.Add(ref sub, 8));
-            var cbVec2 = Vector256.LoadUnsafe(ref Unsafe.Add(ref sub, 72));
-            var crVec2 = Vector256.LoadUnsafe(ref Unsafe.Add(ref sub, 136));
+            var cbcr2 = Vector256.LoadUnsafe(ref Unsafe.Add(ref sub, 72));
+            
+            var lowerHalf2 = Avx.ExtractVector128(cbcr2, 0);
+            var upperHalf2 = Avx.ExtractVector128(cbcr2, 1);
+
+            var cbVec2 = Avx2.PermuteVar8x32(
+                Avx.InsertVector128(Vector256<float>.Zero, lowerHalf2, 0),
+                mask
+            );
+
+            var crVec2 = Avx2.PermuteVar8x32(
+                Avx.InsertVector128(Vector256<float>.Zero, upperHalf2, 0),
+                mask
+            );
 
             yVec2 = Avx.Add(yVec2, Const128);
             cbVec2 = Avx.Add(cbVec2, Const128);
@@ -271,6 +301,48 @@ public sealed class Matrix : IDisposable
             matrix = ref Unsafe.Add(ref matrix, stride);
             
             sub = ref Unsafe.Add(ref sub, 16);
+        }
+    }
+
+    public unsafe void ApplyDeblockingFilter()
+    {
+        var stride = bmpData.Stride;
+        var p = (byte*)bmpData.Scan0;
+        const int threshold = 15;
+        for (var y = 0; y < Height; y++)
+        {
+            for (var x = 8; x <Width; x += 8)
+            {
+                var leftPixel = p + y * stride + (x - 1) * 3;
+                var rightPixel = p + y * stride + x * 3;
+
+                for (var c = 0; c < 3; c++)
+                {
+                    if (Math.Abs(leftPixel[c] - rightPixel[c]) > threshold) continue;
+                    
+                    var avg = (leftPixel[c] + rightPixel[c]) / 2;
+                    leftPixel[c] = (byte)((leftPixel[c] + avg) / 2);
+                    rightPixel[c] = (byte)((rightPixel[c] + avg) / 2);
+                }
+            }
+        }
+        
+        for (var x = 0; x < Width; x++)
+        {
+            for (var y = 8; y < Height; y += 8)
+            {
+                var topPixel = p + (y - 1) * stride + x * 3;
+                var bottomPixel = p + y * stride + x * 3;
+
+                for (var c = 0; c < 3; c++)
+                {
+                    if (Math.Abs(topPixel[c] - bottomPixel[c]) > threshold) continue;
+                    
+                    var avg = (topPixel[c] + bottomPixel[c]) / 2;
+                    topPixel[c] = (byte)((topPixel[c] + avg) / 2);
+                    bottomPixel[c] = (byte)((bottomPixel[c] + avg) / 2);
+                }
+            }
         }
     }
 }

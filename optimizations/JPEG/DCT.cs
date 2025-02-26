@@ -1,4 +1,5 @@
-﻿using System.Runtime.Intrinsics;
+﻿using System;
+using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -16,9 +17,35 @@ public static class Dct
 	private const float B6 = 1.84775906502257351242f;
 	private const float B7 = 3.62450978541155137218f;
 
-	private const float A1 = 0.70710678118654752438f;
+	private const float A1 = 0.70710678118654752438f; //Sqrt(2) / 2
 	private const float A5 = 0.38268343236508977170f;
 	private const float A7 = 0.9238795325112867f;
+	private const float RevSqrt4 = 5.65685424949f; //Sqrt(2) * 4
+	
+	private static readonly Vector256<float>[] PostscaleFixedVecFull = new Vector256<float>[8];
+	private static readonly float[] Scale8X4 = 
+	[
+		B0 / RevSqrt4, B0 * A7 * 0.25f, B0 / RevSqrt4, B0 * A7 * 0.25f,
+		B1 / RevSqrt4, B1 * A7 * 0.25f, B1 / RevSqrt4, B1 * A7 * 0.25f, 
+		B2 / RevSqrt4, B2 * A7 * 0.25f, B2 / RevSqrt4, B2 * A7 * 0.25f,
+		B3 / RevSqrt4, B3 * A7 * 0.25f, B3 / RevSqrt4, B3 * A7 * 0.25f,
+		B4 / RevSqrt4, B4 * A7 * 0.25f, B4 / RevSqrt4, B4 * A7 * 0.25f,
+		B5 / RevSqrt4, B5 * A7 * 0.25f, B5 / RevSqrt4, B5 * A7 * 0.25f,
+		B6 / RevSqrt4, B6 * A7 * 0.25f, B6 / RevSqrt4, B6 * A7 * 0.25f,
+		B7 / RevSqrt4, B7 * A7 * 0.25f, B7 / RevSqrt4, B7 * A7 * 0.25f,
+	];
+
+	static unsafe Dct()
+	{
+		fixed (float* p = Scale8X4)
+		{
+			for (var i = 0; i < 8; i++)
+			{
+				var v = Sse.LoadVector128(p + i * 4);
+				PostscaleFixedVecFull[i] = Vector256.Create(v, v);
+			}
+		}
+	}
 	
 	private static readonly float[] Scale =
 	[
@@ -155,7 +182,7 @@ public static class Dct
 	private const float Ib7 = 0.2758993792829430123360f;
 	
 	private const float Ia2 = 1.8477590650225735f;
-	private const float Ia4 = 1.4142135623730951f;
+	private const float Sqrt = 1.4142135623730951f;
 	private const float Iab4 = -0.7653668647301795f;
 	
 	private static readonly float[] InverseScale =
@@ -169,6 +196,7 @@ public static class Dct
 		Ib6 * Ib0 * 0.125f, Ib6 * Ib1 * 0.125f, Ib6 * Ib2 * 0.125f, Ib6 * Ib3 * 0.125f, Ib6 * Ib4 * 0.125f, Ib6 * Ib5 * 0.125f, Ib6 * Ib6 * 0.125f, Ib6 * Ib7 * 0.125f,
 		Ib7 * Ib0 * 0.125f, Ib7 * Ib1 * 0.125f, Ib7 * Ib2 * 0.125f, Ib7 * Ib3 * 0.125f, Ib7 * Ib4 * 0.125f, Ib7 * Ib5 * 0.125f, Ib7 * Ib6 * 0.125f, Ib7 * Ib7 * 0.125f
 	];
+	private const float RevSqrt2 = 2.82842712475f;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static void InverseDct2D(ref float inp, ref float result)
@@ -215,7 +243,7 @@ public static class Dct
 		var os34= s04 - s26;
 		
 		var od07=  s17 + s53;
-		var od25= (s17 - s53)*Ia4;
+		var od25= (s17 - s53)*Sqrt;
 
 		var od34=  d17*Iab4 - d53*Ia2;
 		var od16=  d53*Iab4 + d17*Ia2;
@@ -224,7 +252,7 @@ public static class Dct
 		od25 -= od16;
 		od34 += od25;
 		
-		d26*= Ia4;
+		d26*= Sqrt;
 		d26-= s26;
 		
 		var os16= d04 + d26;
@@ -238,5 +266,106 @@ public static class Dct
 		(os25 - od25).StoreUnsafe(ref output, 40);
 		(os16 - od16).StoreUnsafe(ref output, 48);
 		(os07 - od07).StoreUnsafe(ref output, 56);
+	}
+	
+	private const float K = 0.41421356237f;
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	private static void IDCT4Vec(ref float input, ref float output)
+	{
+		var data0 = Vector256.LoadUnsafe(ref input, 0);
+		var data1 = Vector256.LoadUnsafe(ref input, 8);
+		var data2 = Vector256.LoadUnsafe(ref input, 16);
+		var data3 = Vector256.LoadUnsafe(ref input, 24);
+
+		var S = data0 + data2;
+		var T = data0 - data2;
+
+		var t0 = data1 + K * data3;
+		var t1 = K * data1 - data3;
+
+		var U = Ib2 * t0;
+		var V = Ib2 * t1;
+
+		(S + U).StoreUnsafe(ref output, 0);
+		(T + V).StoreUnsafe(ref output, 8);
+		(T - V).StoreUnsafe(ref output, 16);
+		(S - U).StoreUnsafe(ref output, 24);
+	}
+	
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	private static void DCT4Vec(ref float input, ref float output)
+	{
+		var data0 = Vector256.LoadUnsafe(ref input, 0);
+		var data1 = Vector256.LoadUnsafe(ref input, 8);
+		var data2 = Vector256.LoadUnsafe(ref input, 16);
+		var data3 = Vector256.LoadUnsafe(ref input, 24);
+
+		var tmp0 = data0 + data3;
+		var tmp3 = data0 - data3;
+		var tmp1 = data1 + data2;
+		var tmp2 = data1 - data2;
+
+		var m0 = tmp3 + K * tmp2;
+		var m1 = K * tmp3 - tmp2;
+
+		(tmp0 + tmp1).StoreUnsafe(ref output, 0);
+		(m0).StoreUnsafe(ref output, 8);
+		(tmp0 - tmp1).StoreUnsafe(ref output, 16);
+		(m1).StoreUnsafe(ref output, 24);
+	}
+	
+	public static void Dct2D422(ref float input, ref float output)
+	{
+		Dct1D(ref input, ref output);
+		TransposeInPlace(ref output);
+		DCT4Vec(ref output, ref input);
+		DCT4Vec(ref Unsafe.Add(ref output, 32), ref Unsafe.Add(ref input, 32));
+		TransposeInPlace(ref input);
+
+		var data0 = Vector256.LoadUnsafe(ref input, 0 );
+		var data1 = Vector256.LoadUnsafe(ref input, 8 );
+		var data2 = Vector256.LoadUnsafe(ref input, 16);
+		var data3 = Vector256.LoadUnsafe(ref input, 24);
+		var data4 = Vector256.LoadUnsafe(ref input, 32);
+		var data5 = Vector256.LoadUnsafe(ref input, 40);
+		var data6 = Vector256.LoadUnsafe(ref input, 48);
+		var data7 = Vector256.LoadUnsafe(ref input, 56);
+
+		(data0 * PostscaleFixedVecFull[0]).StoreUnsafe(ref output, 0 );
+		(data1 * PostscaleFixedVecFull[1]).StoreUnsafe(ref output, 8 );
+		(data2 * PostscaleFixedVecFull[2]).StoreUnsafe(ref output, 16);
+		(data3 * PostscaleFixedVecFull[3]).StoreUnsafe(ref output, 24);
+		(data4 * PostscaleFixedVecFull[4]).StoreUnsafe(ref output, 32);
+		(data5 * PostscaleFixedVecFull[5]).StoreUnsafe(ref output, 40);
+		(data6 * PostscaleFixedVecFull[6]).StoreUnsafe(ref output, 48);
+		(data7 * PostscaleFixedVecFull[7]).StoreUnsafe(ref output, 56);
+	}
+	
+	public static void InverseDct2D422(ref float input, ref float output)
+	{
+		var data0 = Vector256.LoadUnsafe(ref input, 0 );
+		var data1 = Vector256.LoadUnsafe(ref input, 8 );
+		var data2 = Vector256.LoadUnsafe(ref input, 16);
+		var data3 = Vector256.LoadUnsafe(ref input, 24);
+		var data4 = Vector256.LoadUnsafe(ref input, 32);
+		var data5 = Vector256.LoadUnsafe(ref input, 40);
+		var data6 = Vector256.LoadUnsafe(ref input, 48);
+		var data7 = Vector256.LoadUnsafe(ref input, 56);
+		
+		(data0 * 0.17677669f).StoreUnsafe(ref output, 0 );//Ib0 / RevSqrt2 * 0.5f
+		(data1 * 0.24519631f).StoreUnsafe(ref output, 8 );//Ib1 / RevSqrt2 * 0.5f
+		(data2 * 0.23096988f).StoreUnsafe(ref output, 16);//Ib2 / RevSqrt2 * 0.5f
+		(data3 * 0.20786740f).StoreUnsafe(ref output, 24);//Ib3 / RevSqrt2 * 0.5f
+		(data4 * 0.17677669f).StoreUnsafe(ref output, 32);//Ib4 / RevSqrt2 * 0.5f
+		(data5 * 0.13888694f).StoreUnsafe(ref output, 40);//Ib5 / RevSqrt2 * 0.5f
+		(data6 * 0.09567086f).StoreUnsafe(ref output, 48);//Ib6 / RevSqrt2 * 0.5f
+		(data7 * 0.04877258f).StoreUnsafe(ref output, 56);//Ib7 / RevSqrt2 * 0.5f
+
+		TransposeInPlace(ref output);
+		IDCT4Vec(ref output, ref input);
+		IDCT4Vec(ref Unsafe.Add(ref output, 32), ref Unsafe.Add(ref input, 32));
+		TransposeInPlace(ref input);
+		InverseDct1D(ref input, ref output);
 	}
 }
