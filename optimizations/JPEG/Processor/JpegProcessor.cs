@@ -51,6 +51,7 @@ public class JpegProcessor : IJpegProcessor
             for (var x = 0; x < matrix.Width; x += DctSize)
             {
                 matrix.GetSubMatrix(y, x, ref sub);
+                
                 Dct.Dct2D(ref sub, ref freq);
                 Dct.Dct2D422(ref Unsafe.Add(ref sub, 64), ref Unsafe.Add(ref freq, 64));
 
@@ -149,15 +150,23 @@ public class JpegProcessor : IJpegProcessor
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void DeQuantize(ref sbyte quantizedBytes, ref float quant, ref float output)
     {
-        for (UIntPtr i = 0; i < 64; i += 8)
-        {
-            var byteVec = Avx2.ConvertToVector256Int32(Vector128.LoadUnsafe(ref quantizedBytes, i));
-            var floatVec = Avx.ConvertToVector256Single(byteVec);
-
-            var quantVec = Vector256.LoadUnsafe(ref quant, i);
-            var result = floatVec * quantVec;
-            result.StoreUnsafe(ref output, i);
-        }
+        var byteVec0 = Avx2.ConvertToVector256Int32(Vector128.LoadUnsafe(ref quantizedBytes, 0));
+        var byteVec1 = Avx2.ConvertToVector256Int32(Vector128.LoadUnsafe(ref quantizedBytes, 8));
+        var byteVec2 = Avx2.ConvertToVector256Int32(Vector128.LoadUnsafe(ref quantizedBytes,  16));
+        var byteVec3 = Avx2.ConvertToVector256Int32(Vector128.LoadUnsafe(ref quantizedBytes,  24));
+        var byteVec4 = Avx2.ConvertToVector256Int32(Vector128.LoadUnsafe(ref quantizedBytes,  32));
+        var byteVec5 = Avx2.ConvertToVector256Int32(Vector128.LoadUnsafe(ref quantizedBytes,  40));
+        var byteVec6 = Avx2.ConvertToVector256Int32(Vector128.LoadUnsafe(ref quantizedBytes,  48));
+        var byteVec7 = Avx2.ConvertToVector256Int32(Vector128.LoadUnsafe(ref quantizedBytes,  56));
+        
+        (Avx.ConvertToVector256Single(byteVec0) * Vector256.LoadUnsafe(ref quant, 0)).StoreUnsafe(ref output, 0);
+        (Avx.ConvertToVector256Single(byteVec1) * Vector256.LoadUnsafe(ref quant, 8)).StoreUnsafe(ref output, 8);
+        (Avx.ConvertToVector256Single(byteVec2) * Vector256.LoadUnsafe(ref quant,  16)).StoreUnsafe(ref output,  16);
+        (Avx.ConvertToVector256Single(byteVec3) * Vector256.LoadUnsafe(ref quant,  24)).StoreUnsafe(ref output,  24);
+        (Avx.ConvertToVector256Single(byteVec4) * Vector256.LoadUnsafe(ref quant,  32)).StoreUnsafe(ref output,  32);
+        (Avx.ConvertToVector256Single(byteVec5) * Vector256.LoadUnsafe(ref quant,  40)).StoreUnsafe(ref output,  40);
+        (Avx.ConvertToVector256Single(byteVec6) * Vector256.LoadUnsafe(ref quant,  48)).StoreUnsafe(ref output,  48);
+        (Avx.ConvertToVector256Single(byteVec7) * Vector256.LoadUnsafe(ref quant,  56)).StoreUnsafe(ref output,  56);
     }
 
     private static float[] GetQuantizationMatrix(int quality)

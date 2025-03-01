@@ -79,9 +79,9 @@ public unsafe class SimpleBitmap : IDisposable
 
     private void LoadImageData()
     {
+        var imgData = new Span<byte>((byte*)fileBytes + offset, Stride * Height);
         if (isBottomUp)
         {
-            var imgData = new Span<byte>((byte*)fileBytes + offset, Stride * Height);
             FlipImageInPlace(imgData);
         }
     }

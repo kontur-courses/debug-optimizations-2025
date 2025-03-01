@@ -63,20 +63,158 @@ public static class Dct
 	public static void Dct2D(ref float input, ref float output)
 	{
 		ref var scale = ref MemoryMarshal.GetArrayDataReference(Scale);
+
+		var data0 = Vector256.LoadUnsafe(ref input, 0);
+		var data1 = Vector256.LoadUnsafe(ref input, 8);
+		var data2 = Vector256.LoadUnsafe(ref input, 16);
+		var data3 = Vector256.LoadUnsafe(ref input, 24);
+		var data4 = Vector256.LoadUnsafe(ref input, 32);
+		var data5 = Vector256.LoadUnsafe(ref input, 40);
+		var data6 = Vector256.LoadUnsafe(ref input, 48);
+		var data7 = Vector256.LoadUnsafe(ref input, 56);
+
+		var t0 = Avx.UnpackLow( data0, data1);
+		var t1 = Avx.UnpackHigh(data0, data1);
+		var t2 = Avx.UnpackLow( data2, data3);
+		var t3 = Avx.UnpackHigh(data2, data3);
+		var t4 = Avx.UnpackLow( data4, data5);
+		var t5 = Avx.UnpackHigh(data4, data5);
+		var t6 = Avx.UnpackLow( data6, data7);
+		var t7 = Avx.UnpackHigh(data6, data7);
+
+		var tt0 = Avx.UnpackLow(t0.AsDouble(), t2.AsDouble()).AsSingle();
+		var tt1 = Avx.UnpackHigh(t0.AsDouble(), t2.AsDouble()).AsSingle();
+		var tt2 = Avx.UnpackLow(t1.AsDouble(), t3.AsDouble()).AsSingle();
+		var tt3 = Avx.UnpackHigh(t1.AsDouble(), t3.AsDouble()).AsSingle();
+		var tt4 = Avx.UnpackLow(t4.AsDouble(), t6.AsDouble()).AsSingle();
+		var tt5 = Avx.UnpackHigh(t4.AsDouble(), t6.AsDouble()).AsSingle();
+		var tt6 = Avx.UnpackLow(t5.AsDouble(), t7.AsDouble()).AsSingle();
+		var tt7 = Avx.UnpackHigh(t5.AsDouble(), t7.AsDouble()).AsSingle(); 
+
+		data0 = Avx.InsertVector128(tt0, tt4.GetLower(), 1);
+		data1 = Avx.InsertVector128(tt1, tt5.GetLower(), 1);
+		data2 = Avx.InsertVector128(tt2, tt6.GetLower(), 1);
+		data3 = Avx.InsertVector128(tt3, tt7.GetLower(), 1);
+		data4 = Avx.Permute2x128(tt0, tt4, 0x31);
+		data5 = Avx.Permute2x128(tt1, tt5, 0x31);
+		data6 = Avx.Permute2x128(tt2, tt6, 0x31);
+		data7 = Avx.Permute2x128(tt3, tt7, 0x31);
 		
-		TransposeInPlace(ref input);
-		Dct1D(ref input, ref output);
-		TransposeInPlace(ref output);
-		Dct1D(ref output, ref input);
+		var tmp0 = data0 + data7;
+		var tmp7 = data0 - data7;
+		var tmp1 = data1 + data6;
+		var tmp6 = data1 - data6;
+		var tmp2 = data2 + data5;
+		var tmp5 = data2 - data5;
+		var tmp3 = data3 + data4;
+		var tmp4 = data3 - data4;
+
+		var tmp10 = tmp0 + tmp3;
+		var tmp13 = tmp0 - tmp3;
+		var tmp11 = tmp1 + tmp2;
+		var tmp12 = tmp1 - tmp2;
+
+		data0 = (tmp10 + tmp11);
+		data4 = (tmp10 - tmp11);
+
+		tmp12 += tmp13;
+		tmp12 *= A1;
+
+		data2 = (tmp13 + tmp12);
+		data6 = (tmp13 - tmp12);
+
+		tmp4 += tmp5;
+		tmp5 += tmp6;
+		tmp6 += tmp7;
+
+		var z2 = tmp4 * A7 - tmp6 * A5;
+		var z4 = tmp6 * A7 + tmp4 * A5;
+
+		tmp5 *= A1;
+
+		var z11 = tmp7 + tmp5;
+		var z13 = tmp7 - tmp5;
+
+		data5 = (z13 + z2);
+		data3 = (z13 - z2);
+		data1 = (z11 + z4);
+		data7 = (z11 - z4);
 		
-		Avx.Multiply(Vector256.LoadUnsafe(ref input, 0 ), Vector256.LoadUnsafe(ref scale, 0 )).StoreUnsafe(ref output, 0 );
-		Avx.Multiply(Vector256.LoadUnsafe(ref input, 8 ), Vector256.LoadUnsafe(ref scale, 8 )).StoreUnsafe(ref output, 8 );
-		Avx.Multiply(Vector256.LoadUnsafe(ref input, 16), Vector256.LoadUnsafe(ref scale, 16)).StoreUnsafe(ref output, 16);
-		Avx.Multiply(Vector256.LoadUnsafe(ref input, 24), Vector256.LoadUnsafe(ref scale, 24)).StoreUnsafe(ref output, 24);
-		Avx.Multiply(Vector256.LoadUnsafe(ref input, 32), Vector256.LoadUnsafe(ref scale, 32)).StoreUnsafe(ref output, 32);
-		Avx.Multiply(Vector256.LoadUnsafe(ref input, 40), Vector256.LoadUnsafe(ref scale, 40)).StoreUnsafe(ref output, 40);
-		Avx.Multiply(Vector256.LoadUnsafe(ref input, 48), Vector256.LoadUnsafe(ref scale, 48)).StoreUnsafe(ref output, 48);
-		Avx.Multiply(Vector256.LoadUnsafe(ref input, 56), Vector256.LoadUnsafe(ref scale, 56)).StoreUnsafe(ref output, 56);
+		t0 = Avx.UnpackLow( data0, data1);
+		t1 = Avx.UnpackHigh(data0, data1);
+		t2 = Avx.UnpackLow( data2, data3);
+		t3 = Avx.UnpackHigh(data2, data3);
+		t4 = Avx.UnpackLow( data4, data5);
+		t5 = Avx.UnpackHigh(data4, data5);
+		t6 = Avx.UnpackLow( data6, data7);
+		t7 = Avx.UnpackHigh(data6, data7);
+
+		tt0 = Avx.UnpackLow(t0.AsDouble(), t2.AsDouble()).AsSingle();
+		tt1 = Avx.UnpackHigh(t0.AsDouble(), t2.AsDouble()).AsSingle();
+		tt2 = Avx.UnpackLow(t1.AsDouble(), t3.AsDouble()).AsSingle();
+		tt3 = Avx.UnpackHigh(t1.AsDouble(), t3.AsDouble()).AsSingle();
+		tt4 = Avx.UnpackLow(t4.AsDouble(), t6.AsDouble()).AsSingle();
+		tt5 = Avx.UnpackHigh(t4.AsDouble(), t6.AsDouble()).AsSingle();
+		tt6 = Avx.UnpackLow(t5.AsDouble(), t7.AsDouble()).AsSingle();
+		tt7 = Avx.UnpackHigh(t5.AsDouble(), t7.AsDouble()).AsSingle(); 
+
+		data0 = Avx.InsertVector128(tt0, tt4.GetLower(), 1);
+		data1 = Avx.InsertVector128(tt1, tt5.GetLower(), 1);
+		data2 = Avx.InsertVector128(tt2, tt6.GetLower(), 1);
+		data3 = Avx.InsertVector128(tt3, tt7.GetLower(), 1);
+		data4 = Avx.Permute2x128(tt0, tt4, 0x31);
+		data5 = Avx.Permute2x128(tt1, tt5, 0x31);
+		data6 = Avx.Permute2x128(tt2, tt6, 0x31);
+		data7 = Avx.Permute2x128(tt3, tt7, 0x31);
+		
+		tmp0 = data0 + data7;
+		tmp7 = data0 - data7;
+		tmp1 = data1 + data6;
+		tmp6 = data1 - data6;
+		tmp2 = data2 + data5;
+		tmp5 = data2 - data5;
+		tmp3 = data3 + data4;
+		tmp4 = data3 - data4;
+
+		tmp10 = tmp0 + tmp3;
+		tmp13 = tmp0 - tmp3;
+		tmp11 = tmp1 + tmp2;
+		tmp12 = tmp1 - tmp2;
+
+		data0 = (tmp10 + tmp11);
+		data4 = (tmp10 - tmp11);
+
+		tmp12 += tmp13;
+		tmp12 *= A1;
+
+		data2 = (tmp13 + tmp12);
+		data6 = (tmp13 - tmp12);
+
+		tmp4 += tmp5;
+		tmp5 += tmp6;
+		tmp6 += tmp7;
+
+		z2 = tmp4 * A7 - tmp6 * A5;
+		z4 = tmp6 * A7 + tmp4 * A5;
+
+		tmp5 *= A1;
+
+		z11 = tmp7 + tmp5;
+		z13 = tmp7 - tmp5;
+
+		data5 = (z13 + z2);
+		data3 = (z13 - z2);
+		data1 = (z11 + z4);
+		data7 = (z11 - z4);
+		
+		Avx.Multiply(data0, Vector256.LoadUnsafe(ref scale, 0 )).StoreUnsafe(ref output, 0 );
+		Avx.Multiply(data1, Vector256.LoadUnsafe(ref scale, 8 )).StoreUnsafe(ref output, 8 );
+		Avx.Multiply(data2, Vector256.LoadUnsafe(ref scale, 16)).StoreUnsafe(ref output, 16);
+		Avx.Multiply(data3, Vector256.LoadUnsafe(ref scale, 24)).StoreUnsafe(ref output, 24);
+		Avx.Multiply(data4, Vector256.LoadUnsafe(ref scale, 32)).StoreUnsafe(ref output, 32);
+		Avx.Multiply(data5, Vector256.LoadUnsafe(ref scale, 40)).StoreUnsafe(ref output, 40);
+		Avx.Multiply(data6, Vector256.LoadUnsafe(ref scale, 48)).StoreUnsafe(ref output, 48);
+		Avx.Multiply(data7, Vector256.LoadUnsafe(ref scale, 56)).StoreUnsafe(ref output, 56);
 	}
 	
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -202,20 +340,141 @@ public static class Dct
 	{
 		ref var scale = ref MemoryMarshal.GetArrayDataReference(InverseScale);
 		
-		Avx.Multiply(Vector256.LoadUnsafe(ref inp, 0 ), Vector256.LoadUnsafe(ref scale, 0 )).StoreUnsafe(ref result, 0 );
-		Avx.Multiply(Vector256.LoadUnsafe(ref inp, 8 ), Vector256.LoadUnsafe(ref scale, 8 )).StoreUnsafe(ref result, 8 );
-		Avx.Multiply(Vector256.LoadUnsafe(ref inp, 16), Vector256.LoadUnsafe(ref scale, 16)).StoreUnsafe(ref result, 16);
-		Avx.Multiply(Vector256.LoadUnsafe(ref inp, 24), Vector256.LoadUnsafe(ref scale, 24)).StoreUnsafe(ref result, 24);
-		Avx.Multiply(Vector256.LoadUnsafe(ref inp, 32), Vector256.LoadUnsafe(ref scale, 32)).StoreUnsafe(ref result, 32);
-		Avx.Multiply(Vector256.LoadUnsafe(ref inp, 40), Vector256.LoadUnsafe(ref scale, 40)).StoreUnsafe(ref result, 40);
-		Avx.Multiply(Vector256.LoadUnsafe(ref inp, 48), Vector256.LoadUnsafe(ref scale, 48)).StoreUnsafe(ref result, 48);
-		Avx.Multiply(Vector256.LoadUnsafe(ref inp, 56), Vector256.LoadUnsafe(ref scale, 56)).StoreUnsafe(ref result, 56);
+		var data0 = Vector256.LoadUnsafe(ref inp, 0 ) * Vector256.LoadUnsafe(ref scale, 0 );
+		var data1 = Vector256.LoadUnsafe(ref inp, 8 ) * Vector256.LoadUnsafe(ref scale, 8 );
+		var data2 = Vector256.LoadUnsafe(ref inp, 16) * Vector256.LoadUnsafe(ref scale, 16);
+		var data3 = Vector256.LoadUnsafe(ref inp, 24) * Vector256.LoadUnsafe(ref scale, 24);
+		var data4 = Vector256.LoadUnsafe(ref inp, 32) * Vector256.LoadUnsafe(ref scale, 32);
+		var data5 = Vector256.LoadUnsafe(ref inp, 40) * Vector256.LoadUnsafe(ref scale, 40);
+		var data6 = Vector256.LoadUnsafe(ref inp, 48) * Vector256.LoadUnsafe(ref scale, 48);
+		var data7 = Vector256.LoadUnsafe(ref inp, 56) * Vector256.LoadUnsafe(ref scale, 56);
+		
+		var s04= data0 + data4;
+		var d04= data0 - data4;
+		var s17= data1 + data7;
+		var d17= data1 - data7;
+		var s26= data2 + data6;
+		var d26= data2 - data6;
+		var s53= data5 + data3;
+		var d53= data5 - data3;
+		var os07= s04 + s26;
+		var os34= s04 - s26;
+		
+		var od07=  s17 + s53;
+		var od25= (s17 - s53)*Sqrt;
+
+		var od34=  d17*Iab4 - d53*Ia2;
+		var od16=  d53*Iab4 + d17*Ia2;
+
+		od16 -= od07;
+		od25 -= od16;
+		od34 += od25;
+		
+		d26*= Sqrt;
+		d26-= s26;
+		
+		var os16= d04 + d26;
+		var os25= d04 - d26;
+		
+		data0 = (os07 + od07);
+		data1 = (os16 + od16);
+		data2 = (os25 + od25);
+		data3 = (os34 - od34);
+		data4 = (os34 + od34);
+		data5 = (os25 - od25);
+		data6 = (os16 - od16);
+		data7 = (os07 - od07);
+		
+		var t0 = Avx.UnpackLow( data0, data1);
+		var t1 = Avx.UnpackHigh(data0, data1);
+		var t2 = Avx.UnpackLow( data2, data3);
+		var t3 = Avx.UnpackHigh(data2, data3);
+		var t4 = Avx.UnpackLow( data4, data5);
+		var t5 = Avx.UnpackHigh(data4, data5);
+		var t6 = Avx.UnpackLow( data6, data7);
+		var t7 = Avx.UnpackHigh(data6, data7);
+
+		var tt0 = Avx.UnpackLow(t0.AsDouble(), t2.AsDouble()).AsSingle();
+		var tt1 = Avx.UnpackHigh(t0.AsDouble(), t2.AsDouble()).AsSingle();
+		var tt2 = Avx.UnpackLow(t1.AsDouble(), t3.AsDouble()).AsSingle();
+		var tt3 = Avx.UnpackHigh(t1.AsDouble(), t3.AsDouble()).AsSingle();
+		var tt4 = Avx.UnpackLow(t4.AsDouble(), t6.AsDouble()).AsSingle();
+		var tt5 = Avx.UnpackHigh(t4.AsDouble(), t6.AsDouble()).AsSingle();
+		var tt6 = Avx.UnpackLow(t5.AsDouble(), t7.AsDouble()).AsSingle();
+		var tt7 = Avx.UnpackHigh(t5.AsDouble(), t7.AsDouble()).AsSingle(); 
+
+		data0 = Avx.InsertVector128(tt0, tt4.GetLower(), 1);
+		data1 = Avx.InsertVector128(tt1, tt5.GetLower(), 1);
+		data2 = Avx.InsertVector128(tt2, tt6.GetLower(), 1);
+		data3 = Avx.InsertVector128(tt3, tt7.GetLower(), 1);
+		data4 = Avx.Permute2x128(tt0, tt4, 0x31);
+		data5 = Avx.Permute2x128(tt1, tt5, 0x31);
+		data6 = Avx.Permute2x128(tt2, tt6, 0x31);
+		data7 = Avx.Permute2x128(tt3, tt7, 0x31);
+		
+		s04= data0 + data4;
+		d04= data0 - data4;
+		s17= data1 + data7;
+		d17= data1 - data7;
+		s26= data2 + data6;
+		d26= data2 - data6;
+		s53= data5 + data3;
+		d53= data5 - data3;
+		os07= s04 + s26;
+		os34= s04 - s26;
+		
+		od07=  s17 + s53;
+		od25= (s17 - s53)*Sqrt;
+
+		od34=  d17*Iab4 - d53*Ia2;
+		od16=  d53*Iab4 + d17*Ia2;
+
+		od16 -= od07;
+		od25 -= od16;
+		od34 += od25;
+		
+		d26*= Sqrt;
+		d26-= s26;
+		
+		os16= d04 + d26;
+		os25= d04 - d26;
+		
+		data0 = (os07 + od07);
+		data1 = (os16 + od16);
+		data2 = (os25 + od25);
+		data3 = (os34 - od34);
+		data4 = (os34 + od34);
+		data5 = (os25 - od25);
+		data6 = (os16 - od16);
+		data7 = (os07 - od07);
 		
 		
-		InverseDct1D(ref result, ref inp);
-		TransposeInPlace(ref inp);
-		InverseDct1D(ref inp, ref result);
-		TransposeInPlace(ref result);
+		t0 = Avx.UnpackLow( data0, data1);
+		t1 = Avx.UnpackHigh(data0, data1);
+		t2 = Avx.UnpackLow( data2, data3);
+		t3 = Avx.UnpackHigh(data2, data3);
+		t4 = Avx.UnpackLow( data4, data5);
+		t5 = Avx.UnpackHigh(data4, data5);
+		t6 = Avx.UnpackLow( data6, data7);
+		t7 = Avx.UnpackHigh(data6, data7);
+
+		tt0 = Avx.UnpackLow(t0.AsDouble(), t2.AsDouble()).AsSingle();
+		tt1 = Avx.UnpackHigh(t0.AsDouble(), t2.AsDouble()).AsSingle();
+		tt2 = Avx.UnpackLow(t1.AsDouble(), t3.AsDouble()).AsSingle();
+		tt3 = Avx.UnpackHigh(t1.AsDouble(), t3.AsDouble()).AsSingle();
+		tt4 = Avx.UnpackLow(t4.AsDouble(), t6.AsDouble()).AsSingle();
+		tt5 = Avx.UnpackHigh(t4.AsDouble(), t6.AsDouble()).AsSingle();
+		tt6 = Avx.UnpackLow(t5.AsDouble(), t7.AsDouble()).AsSingle();
+		tt7 = Avx.UnpackHigh(t5.AsDouble(), t7.AsDouble()).AsSingle(); 
+
+		Avx.InsertVector128(tt0, tt4.GetLower(), 1).StoreUnsafe(ref result, 0 );
+		Avx.InsertVector128(tt1, tt5.GetLower(), 1).StoreUnsafe(ref result, 8 );
+		Avx.InsertVector128(tt2, tt6.GetLower(), 1).StoreUnsafe(ref result, 16);
+		Avx.InsertVector128(tt3, tt7.GetLower(), 1).StoreUnsafe(ref result, 24);
+		Avx.Permute2x128(tt0, tt4, 0x31).StoreUnsafe(ref result, 32);
+		Avx.Permute2x128(tt1, tt5, 0x31).StoreUnsafe(ref result, 40);
+		Avx.Permute2x128(tt2, tt6, 0x31).StoreUnsafe(ref result, 48);
+		Avx.Permute2x128(tt3, tt7, 0x31).StoreUnsafe(ref result, 56);
 	}
 	
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -316,20 +575,134 @@ public static class Dct
 	
 	public static void Dct2D422(ref float input, ref float output)
 	{
-		Dct1D(ref input, ref output);
-		TransposeInPlace(ref output);
-		DCT4Vec(ref output, ref input);
-		DCT4Vec(ref Unsafe.Add(ref output, 32), ref Unsafe.Add(ref input, 32));
-		TransposeInPlace(ref input);
-
-		var data0 = Vector256.LoadUnsafe(ref input, 0 );
-		var data1 = Vector256.LoadUnsafe(ref input, 8 );
+		var data0 = Vector256.LoadUnsafe(ref input, 0);
+		var data1 = Vector256.LoadUnsafe(ref input, 8);
 		var data2 = Vector256.LoadUnsafe(ref input, 16);
 		var data3 = Vector256.LoadUnsafe(ref input, 24);
 		var data4 = Vector256.LoadUnsafe(ref input, 32);
 		var data5 = Vector256.LoadUnsafe(ref input, 40);
 		var data6 = Vector256.LoadUnsafe(ref input, 48);
 		var data7 = Vector256.LoadUnsafe(ref input, 56);
+		
+		var tmp0 = data0 + data7;
+		var tmp7 = data0 - data7;
+		var tmp1 = data1 + data6;
+		var tmp6 = data1 - data6;
+		var tmp2 = data2 + data5;
+		var tmp5 = data2 - data5;
+		var tmp3 = data3 + data4;
+		var tmp4 = data3 - data4;
+
+		var tmp10 = tmp0 + tmp3;
+		var tmp13 = tmp0 - tmp3;
+		var tmp11 = tmp1 + tmp2;
+		var tmp12 = tmp1 - tmp2;
+
+		data0 = (tmp10 + tmp11);
+		data4 = (tmp10 - tmp11);
+
+		tmp12 += tmp13;
+		tmp12 *= A1;
+
+		data2 = (tmp13 + tmp12);
+		data6 = (tmp13 - tmp12);
+
+		tmp4 += tmp5;
+		tmp5 += tmp6;
+		tmp6 += tmp7;
+
+		var z2 = tmp4 * A7 - tmp6 * A5;
+		var z4 = tmp6 * A7 + tmp4 * A5;
+
+		tmp5 *= A1;
+
+		var z11 = tmp7 + tmp5;
+		var z13 = tmp7 - tmp5;
+
+		data5 = (z13 + z2);
+		data3 = (z13 - z2);
+		data1 = (z11 + z4);
+		data7 = (z11 - z4);
+		
+		var t0 = Avx.UnpackLow( data0, data1);
+		var t1 = Avx.UnpackHigh(data0, data1);
+		var t2 = Avx.UnpackLow( data2, data3);
+		var t3 = Avx.UnpackHigh(data2, data3);
+		var t4 = Avx.UnpackLow( data4, data5);
+		var t5 = Avx.UnpackHigh(data4, data5);
+		var t6 = Avx.UnpackLow( data6, data7);
+		var t7 = Avx.UnpackHigh(data6, data7);
+
+		var tt0 = Avx.UnpackLow(t0.AsDouble(), t2.AsDouble()).AsSingle();
+		var tt1 = Avx.UnpackHigh(t0.AsDouble(), t2.AsDouble()).AsSingle();
+		var tt2 = Avx.UnpackLow(t1.AsDouble(), t3.AsDouble()).AsSingle();
+		var tt3 = Avx.UnpackHigh(t1.AsDouble(), t3.AsDouble()).AsSingle();
+		var tt4 = Avx.UnpackLow(t4.AsDouble(), t6.AsDouble()).AsSingle();
+		var tt5 = Avx.UnpackHigh(t4.AsDouble(), t6.AsDouble()).AsSingle();
+		var tt6 = Avx.UnpackLow(t5.AsDouble(), t7.AsDouble()).AsSingle();
+		var tt7 = Avx.UnpackHigh(t5.AsDouble(), t7.AsDouble()).AsSingle(); 
+		
+		data0 = Avx.InsertVector128(tt0, tt4.GetLower(), 1);
+		data1 = Avx.InsertVector128(tt1, tt5.GetLower(), 1);
+		data2 = Avx.InsertVector128(tt2, tt6.GetLower(), 1);
+		data3 = Avx.InsertVector128(tt3, tt7.GetLower(), 1);
+		data4 = Avx.Permute2x128(tt0, tt4, 0x31);
+		data5 = Avx.Permute2x128(tt1, tt5, 0x31);
+		data6 = Avx.Permute2x128(tt2, tt6, 0x31);
+		data7 = Avx.Permute2x128(tt3, tt7, 0x31);
+
+		tmp0 = data0 + data3;
+		tmp3 = data0 - data3;
+		tmp1 = data1 + data2;
+		tmp2 = data1 - data2;
+
+		var m0 = tmp3 + K * tmp2;
+		var m1 = K * tmp3 - tmp2;
+
+		data0 = (tmp0 + tmp1);
+		data1 = (m0);
+		data2 = (tmp0 - tmp1);
+		data3 = (m1);
+		
+		tmp0 = data4 + data7;
+		tmp3 = data4 - data7;
+		tmp1 = data5 + data6;
+		tmp2 = data5 - data6;
+
+		m0 = tmp3 + K * tmp2;
+		m1 = K * tmp3 - tmp2;
+
+		data4 = (tmp0 + tmp1);
+		data5 = (m0);
+		data6 = (tmp0 - tmp1);
+		data7 = (m1);
+		
+		t0 = Avx.UnpackLow( data0, data1);
+		t1 = Avx.UnpackHigh(data0, data1);
+		t2 = Avx.UnpackLow( data2, data3);
+		t3 = Avx.UnpackHigh(data2, data3);
+		t4 = Avx.UnpackLow( data4, data5);
+		t5 = Avx.UnpackHigh(data4, data5);
+		t6 = Avx.UnpackLow( data6, data7);
+		t7 = Avx.UnpackHigh(data6, data7);
+
+		tt0 = Avx.UnpackLow(t0.AsDouble(), t2.AsDouble()).AsSingle();
+		tt1 = Avx.UnpackHigh(t0.AsDouble(), t2.AsDouble()).AsSingle();
+		tt2 = Avx.UnpackLow(t1.AsDouble(), t3.AsDouble()).AsSingle();
+		tt3 = Avx.UnpackHigh(t1.AsDouble(), t3.AsDouble()).AsSingle();
+		tt4 = Avx.UnpackLow(t4.AsDouble(), t6.AsDouble()).AsSingle();
+		tt5 = Avx.UnpackHigh(t4.AsDouble(), t6.AsDouble()).AsSingle();
+		tt6 = Avx.UnpackLow(t5.AsDouble(), t7.AsDouble()).AsSingle();
+		tt7 = Avx.UnpackHigh(t5.AsDouble(), t7.AsDouble()).AsSingle(); 
+		
+		data0 = Avx.InsertVector128(tt0, tt4.GetLower(), 1);
+		data1 = Avx.InsertVector128(tt1, tt5.GetLower(), 1);
+		data2 = Avx.InsertVector128(tt2, tt6.GetLower(), 1);
+		data3 = Avx.InsertVector128(tt3, tt7.GetLower(), 1);
+		data4 = Avx.Permute2x128(tt0, tt4, 0x31);
+		data5 = Avx.Permute2x128(tt1, tt5, 0x31);
+		data6 = Avx.Permute2x128(tt2, tt6, 0x31);
+		data7 = Avx.Permute2x128(tt3, tt7, 0x31);
 
 		(data0 * PostscaleFixedVecFull[0]).StoreUnsafe(ref output, 0 );
 		(data1 * PostscaleFixedVecFull[1]).StoreUnsafe(ref output, 8 );
@@ -343,28 +716,131 @@ public static class Dct
 	
 	public static void InverseDct2D422(ref float input, ref float output)
 	{
-		var data0 = Vector256.LoadUnsafe(ref input, 0 );
-		var data1 = Vector256.LoadUnsafe(ref input, 8 );
-		var data2 = Vector256.LoadUnsafe(ref input, 16);
-		var data3 = Vector256.LoadUnsafe(ref input, 24);
-		var data4 = Vector256.LoadUnsafe(ref input, 32);
-		var data5 = Vector256.LoadUnsafe(ref input, 40);
-		var data6 = Vector256.LoadUnsafe(ref input, 48);
-		var data7 = Vector256.LoadUnsafe(ref input, 56);
+		var data0 = Vector256.LoadUnsafe(ref input, 0 ) * 0.17677669f;
+		var data1 = Vector256.LoadUnsafe(ref input, 8 ) * 0.24519631f;
+		var data2 = Vector256.LoadUnsafe(ref input, 16) * 0.23096988f;
+		var data3 = Vector256.LoadUnsafe(ref input, 24) * 0.20786740f;
+		var data4 = Vector256.LoadUnsafe(ref input, 32) * 0.17677669f;
+		var data5 = Vector256.LoadUnsafe(ref input, 40) * 0.13888694f;
+		var data6 = Vector256.LoadUnsafe(ref input, 48) * 0.09567086f;
+		var data7 = Vector256.LoadUnsafe(ref input, 56) * 0.04877258f;
 		
-		(data0 * 0.17677669f).StoreUnsafe(ref output, 0 );//Ib0 / RevSqrt2 * 0.5f
-		(data1 * 0.24519631f).StoreUnsafe(ref output, 8 );//Ib1 / RevSqrt2 * 0.5f
-		(data2 * 0.23096988f).StoreUnsafe(ref output, 16);//Ib2 / RevSqrt2 * 0.5f
-		(data3 * 0.20786740f).StoreUnsafe(ref output, 24);//Ib3 / RevSqrt2 * 0.5f
-		(data4 * 0.17677669f).StoreUnsafe(ref output, 32);//Ib4 / RevSqrt2 * 0.5f
-		(data5 * 0.13888694f).StoreUnsafe(ref output, 40);//Ib5 / RevSqrt2 * 0.5f
-		(data6 * 0.09567086f).StoreUnsafe(ref output, 48);//Ib6 / RevSqrt2 * 0.5f
-		(data7 * 0.04877258f).StoreUnsafe(ref output, 56);//Ib7 / RevSqrt2 * 0.5f
+		var t0 = Avx.UnpackLow( data0, data1);
+		var t1 = Avx.UnpackHigh(data0, data1);
+		var t2 = Avx.UnpackLow( data2, data3);
+		var t3 = Avx.UnpackHigh(data2, data3);
+		var t4 = Avx.UnpackLow( data4, data5);
+		var t5 = Avx.UnpackHigh(data4, data5);
+		var t6 = Avx.UnpackLow( data6, data7);
+		var t7 = Avx.UnpackHigh(data6, data7);
 
-		TransposeInPlace(ref output);
-		IDCT4Vec(ref output, ref input);
-		IDCT4Vec(ref Unsafe.Add(ref output, 32), ref Unsafe.Add(ref input, 32));
-		TransposeInPlace(ref input);
-		InverseDct1D(ref input, ref output);
+		var tt0 = Avx.UnpackLow(t0.AsDouble(), t2.AsDouble()).AsSingle();
+		var tt1 = Avx.UnpackHigh(t0.AsDouble(), t2.AsDouble()).AsSingle();
+		var tt2 = Avx.UnpackLow(t1.AsDouble(), t3.AsDouble()).AsSingle();
+		var tt3 = Avx.UnpackHigh(t1.AsDouble(), t3.AsDouble()).AsSingle();
+		var tt4 = Avx.UnpackLow(t4.AsDouble(), t6.AsDouble()).AsSingle();
+		var tt5 = Avx.UnpackHigh(t4.AsDouble(), t6.AsDouble()).AsSingle();
+		var tt6 = Avx.UnpackLow(t5.AsDouble(), t7.AsDouble()).AsSingle();
+		var tt7 = Avx.UnpackHigh(t5.AsDouble(), t7.AsDouble()).AsSingle(); 
+
+		data0 = Avx.InsertVector128(tt0, tt4.GetLower(), 1);
+		data1 = Avx.InsertVector128(tt1, tt5.GetLower(), 1);
+		data2 = Avx.InsertVector128(tt2, tt6.GetLower(), 1);
+		data3 = Avx.InsertVector128(tt3, tt7.GetLower(), 1);
+		data4 = Avx.Permute2x128(tt0, tt4, 0x31);
+		data5 = Avx.Permute2x128(tt1, tt5, 0x31);
+		data6 = Avx.Permute2x128(tt2, tt6, 0x31);
+		data7 = Avx.Permute2x128(tt3, tt7, 0x31);
+
+		var S = data0 + data2;
+		var T = data0 - data2;
+
+		var t0v = data1 + K * data3;
+		var t1v = K * data1 - data3;
+
+		var U = Ib2 * t0v;
+		var V = Ib2 * t1v;
+
+		data0 = (S + U);
+		data1 = (T + V);
+		data2 = (T - V);
+		data3 = (S - U);
+		
+		S = data4 + data6;
+		T = data4 - data6;
+
+		t0v = data5 + K * data7;
+		t1v = K * data5 - data7;
+
+		U = Ib2 * t0v;
+		V = Ib2 * t1v;
+
+		data4 = (S + U);
+		data5 = (T + V);
+		data6 = (T - V);
+		data7 = (S - U);
+		
+		t0 = Avx.UnpackLow( data0, data1);
+		t1 = Avx.UnpackHigh(data0, data1);
+		t2 = Avx.UnpackLow( data2, data3);
+		t3 = Avx.UnpackHigh(data2, data3);
+		t4 = Avx.UnpackLow( data4, data5);
+		t5 = Avx.UnpackHigh(data4, data5);
+		t6 = Avx.UnpackLow( data6, data7);
+		t7 = Avx.UnpackHigh(data6, data7);
+
+		tt0 = Avx.UnpackLow(t0.AsDouble(), t2.AsDouble()).AsSingle();
+		tt1 = Avx.UnpackHigh(t0.AsDouble(), t2.AsDouble()).AsSingle();
+		tt2 = Avx.UnpackLow(t1.AsDouble(), t3.AsDouble()).AsSingle();
+		tt3 = Avx.UnpackHigh(t1.AsDouble(), t3.AsDouble()).AsSingle();
+		tt4 = Avx.UnpackLow(t4.AsDouble(), t6.AsDouble()).AsSingle();
+		tt5 = Avx.UnpackHigh(t4.AsDouble(), t6.AsDouble()).AsSingle();
+		tt6 = Avx.UnpackLow(t5.AsDouble(), t7.AsDouble()).AsSingle();
+		tt7 = Avx.UnpackHigh(t5.AsDouble(), t7.AsDouble()).AsSingle(); 
+
+		data0 = Avx.InsertVector128(tt0, tt4.GetLower(), 1);
+		data1 = Avx.InsertVector128(tt1, tt5.GetLower(), 1);
+		data2 = Avx.InsertVector128(tt2, tt6.GetLower(), 1);
+		data3 = Avx.InsertVector128(tt3, tt7.GetLower(), 1);
+		data4 = Avx.Permute2x128(tt0, tt4, 0x31);
+		data5 = Avx.Permute2x128(tt1, tt5, 0x31);
+		data6 = Avx.Permute2x128(tt2, tt6, 0x31);
+		data7 = Avx.Permute2x128(tt3, tt7, 0x31);
+		
+		var s04= data0 + data4;
+		var d04= data0 - data4;
+		var s17= data1 + data7;
+		var d17= data1 - data7;
+		var s26= data2 + data6;
+		var d26= data2 - data6;
+		var s53= data5 + data3;
+		var d53= data5 - data3;
+		var os07= s04 + s26;
+		var os34= s04 - s26;
+		
+		var od07=  s17 + s53;
+		var od25= (s17 - s53)*Sqrt;
+
+		var od34=  d17*Iab4 - d53*Ia2;
+		var od16=  d53*Iab4 + d17*Ia2;
+
+		od16 -= od07;
+		od25 -= od16;
+		od34 += od25;
+		
+		d26*= Sqrt;
+		d26-= s26;
+		
+		var os16= d04 + d26;
+		var os25= d04 - d26;
+		
+		(os07 + od07).StoreUnsafe(ref output, 0 );
+		(os16 + od16).StoreUnsafe(ref output, 8 );
+		(os25 + od25).StoreUnsafe(ref output, 16);
+		(os34 - od34).StoreUnsafe(ref output, 24);
+		(os34 + od34).StoreUnsafe(ref output, 32);
+		(os25 - od25).StoreUnsafe(ref output, 40);
+		(os16 - od16).StoreUnsafe(ref output, 48);
+		(os07 - od07).StoreUnsafe(ref output, 56);
 	}
 }

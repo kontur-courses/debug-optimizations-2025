@@ -112,9 +112,9 @@ public sealed class Matrix : IDisposable
     private static readonly Vector256<float> vCrFirst = Vector256.Create(0.43921484375f);
     private static readonly Vector256<float> vCrSecond = Vector256.Create(-0.3677890625f);
     private static readonly Vector256<float> vCrThird = Vector256.Create(-0.07142578125f);
-    private static Vector256<float> Half =      Vector256.Create(0.5f);
+    private static readonly Vector256<int> controlMask = Vector256.Create(0, 2, 4, 6, 1, 3, 5, 7);
+    private static readonly Vector256<float> Half = Vector256.Create(0.5f);
     private const nint Bound4 = 4;
-    private static Vector256<int> controlMask = Vector256.Create(0, 2, 4, 6, 1, 3, 5, 7);
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void GetSubMatrix(int yOffset, int xOffset, ref float output)
