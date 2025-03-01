@@ -196,7 +196,6 @@ public static class Dct
 		Ib6 * Ib0 * 0.125f, Ib6 * Ib1 * 0.125f, Ib6 * Ib2 * 0.125f, Ib6 * Ib3 * 0.125f, Ib6 * Ib4 * 0.125f, Ib6 * Ib5 * 0.125f, Ib6 * Ib6 * 0.125f, Ib6 * Ib7 * 0.125f,
 		Ib7 * Ib0 * 0.125f, Ib7 * Ib1 * 0.125f, Ib7 * Ib2 * 0.125f, Ib7 * Ib3 * 0.125f, Ib7 * Ib4 * 0.125f, Ib7 * Ib5 * 0.125f, Ib7 * Ib6 * 0.125f, Ib7 * Ib7 * 0.125f
 	];
-	private const float RevSqrt2 = 2.82842712475f;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static void InverseDct2D(ref float inp, ref float result)

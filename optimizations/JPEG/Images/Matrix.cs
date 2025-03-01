@@ -1,53 +1,51 @@
 ﻿using System;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 
-namespace JPEG;
+namespace JPEG.Images;
 
 public sealed class Matrix : IDisposable
 {
-    private readonly Bitmap bitmap;
-    private readonly BitmapData bmpData;
+    private readonly SimpleBitmap bmp;
     private readonly int stride;
     private readonly IntPtr scan0;
     private bool isDisposed;
+    private bool isTaken;
 
     public int Height { get; }
     public int Width { get; }
-
-    public Matrix(Bitmap bitmap)
+    
+    public Matrix(SimpleBitmap bitmap)
     {
-        this.bitmap = bitmap;
         Height = bitmap.Height - bitmap.Height % 8;
         Width = bitmap.Width - bitmap.Width % 8;
-        bmpData = this.bitmap.LockBits(new Rectangle(0, 0, Width, Height), ImageLockMode.ReadOnly,
-            PixelFormat.Format24bppRgb);
-        stride = bmpData.Stride;
-        scan0 = bmpData.Scan0;
+        stride = bitmap.Stride;
+        scan0 = bitmap.Scan0;
+        isTaken = true;
     }
 
     public Matrix(int width, int height)
     {
         Height = height - height % 8;
         Width = width - width % 8;
-        bitmap = new Bitmap(Width, Height, PixelFormat.Format24bppRgb);
-        bmpData = bitmap.LockBits(new Rectangle(0, 0, Width, Height), ImageLockMode.WriteOnly,
-            PixelFormat.Format24bppRgb);
-        stride = bmpData.Stride;
-        scan0 = bmpData.Scan0;
+        bmp = new SimpleBitmap(Width, Height);
+        stride = bmp.Stride;
+        scan0 = bmp.Scan0;
     }
 
     public void Dispose()
     {
-        if (isDisposed) return;
-        bitmap.UnlockBits(bmpData);
+        if (isDisposed || isTaken) return;
+        bmp.Dispose();
         isDisposed = true;
     }
-
-    public Bitmap ToBitmap() => bitmap;
+    
+    public SimpleBitmap ToBitmap()
+    {
+        isTaken = true;
+        return bmp;
+    }
 
     private static readonly Vector128<byte> Ssse3RedIndices0 =
         Vector128.Create(0, 3, 6, 9, 12, 15, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1).AsByte();
@@ -117,6 +115,7 @@ public sealed class Matrix : IDisposable
     private static Vector256<float> Half =      Vector256.Create(0.5f);
     private const nint Bound4 = 4;
     private static Vector256<int> controlMask = Vector256.Create(0, 2, 4, 6, 1, 3, 5, 7);
+    
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void GetSubMatrix(int yOffset, int xOffset, ref float output)
     {
@@ -196,8 +195,7 @@ public sealed class Matrix : IDisposable
     private static readonly Vector256<float> Const135 = Vector256.Create(135.576f);
     private static readonly Vector256<float> Const222 = Vector256.Create(222.921f);
     private static readonly Vector256<float> Const256 = Vector256.Create(1f / 256f);
-    private static readonly Vector256<float> Max = Vector256.Create(255.0f);
-    private static readonly Vector256<float> Min = Vector256.Create(0.0f);
+    private static readonly Vector256<int> mask = Vector256.Create(0, 0, 1, 1, 2, 2, 3, 3);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void SetPixels(ref float sub, int yOffset, int xOffset)
@@ -207,12 +205,9 @@ public sealed class Matrix : IDisposable
         {
             var yVec = Vector256.LoadUnsafe(ref Unsafe.Add(ref sub, 0));
             var cbcr = Vector256.LoadUnsafe(ref Unsafe.Add(ref sub, 64));
-
-
+            
             var lowerHalf = Avx.ExtractVector128(cbcr, 0);
             var upperHalf = Avx.ExtractVector128(cbcr, 1);
-
-            var mask = Vector256.Create(0, 0, 1, 1, 2, 2, 3, 3);
 
             var cbVec = Avx2.PermuteVar8x32(
                 Avx.InsertVector128(Vector256<float>.Zero, lowerHalf, 0),
@@ -259,28 +254,21 @@ public sealed class Matrix : IDisposable
             var g2 = (yScaled2 - Const100 * cbVec2 - Const208 * crVec2) * Const256 + Const135;
             var b2 = (yScaled2 + Const408 * crVec2) * Const256 - Const222;
 
-            var red1 = Avx.Min(Avx.Max(r, Min), Max);
-            var red2 = Avx.Min(Avx.Max(r2, Min), Max);
-            var green1 = Avx.Min(Avx.Max(g, Min), Max);
-            var green2 = Avx.Min(Avx.Max(g2, Min), Max);
-            var blue1 = Avx.Min(Avx.Max(b, Min), Max);
-            var blue2 = Avx.Min(Avx.Max(b2, Min), Max);
-
-            var rmin1 = Avx.ConvertToVector256Int32(red1);
-            var rmin2 = Avx.ConvertToVector256Int32(red2);
-            var gmin1 = Avx.ConvertToVector256Int32(green1);
-            var gmin2 = Avx.ConvertToVector256Int32(green2);
-            var bmin1 = Avx.ConvertToVector256Int32(blue1);
-            var bmin2 = Avx.ConvertToVector256Int32(blue2);
-
+            var rmin1 = Avx.ConvertToVector256Int32(r);
+            var rmin2 = Avx.ConvertToVector256Int32(r2);
             var rsat = Avx2.PackSignedSaturate(rmin1, rmin2);
-            var gsat = Avx2.PackSignedSaturate(gmin1, gmin2);
-            var bsat = Avx2.PackSignedSaturate(bmin1, bmin2);
-
             var predLow  = Avx2.Permute2x128(rsat, rsat, 0x20).GetLower();
             var predHigh = Avx2.Permute2x128(rsat, rsat, 0x31).GetLower();
+            
+            var gmin1 = Avx.ConvertToVector256Int32(g);
+            var gmin2 = Avx.ConvertToVector256Int32(g2);
+            var gsat = Avx2.PackSignedSaturate(gmin1, gmin2);
             var pgreenLow  = Avx2.Permute2x128(gsat, gsat, 0x20).GetLower();
             var pgreenHigh = Avx2.Permute2x128(gsat, gsat, 0x31).GetLower();
+            
+            var bmin1 = Avx.ConvertToVector256Int32(b);
+            var bmin2 = Avx.ConvertToVector256Int32(b2);
+            var bsat = Avx2.PackSignedSaturate(bmin1, bmin2);
             var pblueLow  = Avx2.Permute2x128(bsat, bsat, 0x20).GetLower();
             var pblueHigh = Avx2.Permute2x128(bsat, bsat, 0x31).GetLower();
             
@@ -306,16 +294,16 @@ public sealed class Matrix : IDisposable
 
     public unsafe void ApplyDeblockingFilter()
     {
-        var stride = bmpData.Stride;
-        var p = (byte*)bmpData.Scan0;
-        const int threshold = 15;
+        var stride = bmp.Stride;
+        var p = (byte*)bmp.Scan0.ToPointer();
+        const int threshold = 20;
         for (var y = 0; y < Height; y++)
         {
             for (var x = 8; x <Width; x += 8)
             {
                 var leftPixel = p + y * stride + (x - 1) * 3;
                 var rightPixel = p + y * stride + x * 3;
-
+    
                 for (var c = 0; c < 3; c++)
                 {
                     if (Math.Abs(leftPixel[c] - rightPixel[c]) > threshold) continue;
@@ -333,7 +321,7 @@ public sealed class Matrix : IDisposable
             {
                 var topPixel = p + (y - 1) * stride + x * 3;
                 var bottomPixel = p + y * stride + x * 3;
-
+    
                 for (var c = 0; c < 3; c++)
                 {
                     if (Math.Abs(topPixel[c] - bottomPixel[c]) > threshold) continue;

@@ -1,11 +1,9 @@
 using System;
-using System.IO;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 using JPEG.Huffman;
+using JPEG.Images;
 
 namespace JPEG.Processor;
 
@@ -19,7 +17,7 @@ public class JpegProcessor : IJpegProcessor
 
     public void Compress(string imagePath, string compressedImagePath)
     {
-        using var bmp = new Bitmap(imagePath);
+        using var bmp = new SimpleBitmap(imagePath);
         var compressionResult = Compress(bmp, CompressionQuality);
         compressionResult.Save(compressedImagePath);
     }
@@ -27,12 +25,11 @@ public class JpegProcessor : IJpegProcessor
     public void Uncompress(string compressedImagePath, string uncompressedImagePath)
     {
         var compressedImage = CompressedImage.Load(compressedImagePath);
-        var uncompressedImage = Uncompress(compressedImage);
-        var resultBmp = uncompressedImage;
-        resultBmp.Save(uncompressedImagePath, ImageFormat.Bmp);
+        using var uncompressedImage = Uncompress(compressedImage);
+        uncompressedImage.Save(uncompressedImagePath);
     }
 
-    private static CompressedImage Compress(Bitmap bmp, int quality = 50)
+    private static CompressedImage Compress(SimpleBitmap bmp, int quality = 50)
     {
         using var matrix = new Matrix(bmp);
 
@@ -73,7 +70,7 @@ public class JpegProcessor : IJpegProcessor
         };
     }
 
-    private static Bitmap Uncompress(CompressedImage image)
+    private static SimpleBitmap Uncompress(CompressedImage image)
     {
         using var matrix = new Matrix(image.Width, image.Height);
         var length = image.Height * image.Width * 2;

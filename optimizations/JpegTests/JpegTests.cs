@@ -60,7 +60,7 @@ public class JpegTests
     }
     
     [Test]
-    public void IDct8x4()
+    public void IDct82D422()
     {
         var expected = new float[]
         {
