@@ -41,6 +41,7 @@
 * [Про IEquatable](https://devblogs.microsoft.com/premier-developer/performance-implications-of-default-struct-equality-in-c/)
 * [Про Inlining методов](https://web.archive.org/web/20200108171755/http://blogs.microsoft.co.il/sasha/2012/01/20/aggressive-inlining-in-the-clr-45-jit/)
 * [Про сборку мусора](https://learn.microsoft.com/en-us/dotnet/standard/garbage-collection/)
+* [dotnet diagnostic tutorials от Microsoft](https://learn.microsoft.com/en-us/dotnet/core/diagnostics/debug-memory-leak)
 
 Презентации:
 * [Презентация оптимизация](https://docs.google.com/presentation/d/1UeNl-Hd9NmE7iJhIX_WpInYBPxY9Q1fK_cgXXW_-Kh0/edit?usp=sharing)
